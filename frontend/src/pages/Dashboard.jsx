@@ -116,6 +116,18 @@ function FacturesModule({ dossierId, headers }) {
     }
   }
 
+  const exportExcel = async () => {
+    const res = await axios.get(
+      `http://127.0.0.1:8000/factures/${dossierId}/export`,
+      { headers, responseType: "blob" }
+    )
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `journal_dossier_${dossierId}.xlsx`
+    a.click()
+  }
+
   return (
     <div>
       <h1 style={{ fontSize: "20px", fontWeight: "500", marginBottom: "4px" }}>Mes factures</h1>
@@ -144,14 +156,23 @@ function FacturesModule({ dossierId, headers }) {
 
       {factures.length > 0 && (
         <div style={{ background: "white", border: "0.5px solid #e0dfd8", borderRadius: "16px", overflow: "hidden" }}>
-          <div style={{ padding: "14px 18px", borderBottom: "0.5px solid #e0dfd8", fontSize: "13px", fontWeight: "500" }}>
-            {factures.length} facture(s) uploadée(s)
+          <div style={{ padding: "14px 18px", borderBottom: "0.5px solid #e0dfd8", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: "13px", fontWeight: "500" }}>{factures.length} facture(s) uploadée(s)</span>
+            <button onClick={exportExcel}
+              style={{
+                padding: "6px 14px", fontSize: "12px",
+                background: "#1a1a1a", color: "white",
+                borderRadius: "8px", border: "none", cursor: "pointer"
+              }}>
+              Exporter Excel
+            </button>
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
               <tr style={{ background: "#f5f5f0" }}>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: "500", color: "#888" }}>Fichier</th>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: "500", color: "#888" }}>Fournisseur</th>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: "500", color: "#888" }}>Code tiers</th>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: "500", color: "#888" }}>Montant TTC</th>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: "500", color: "#888" }}>Statut</th>
               </tr>
@@ -161,7 +182,8 @@ function FacturesModule({ dossierId, headers }) {
                 <tr key={f.id} style={{ borderTop: "0.5px solid #f0f0f0" }}>
                   <td style={{ padding: "9px 14px", color: "#aaa" }}>{f.nom_fichier}</td>
                   <td style={{ padding: "9px 14px" }}>{f.fournisseur || "—"}</td>
-                  <td style={{ padding: "9px 14px" }}>{f.montant_ttc ? `${f.montant_ttc} MAD` : "—"}</td>
+                  <td style={{ padding: "9px 14px", fontFamily: "monospace", fontSize: "11px" }}>{f.code_tiers || "—"}</td>
+                  <td style={{ padding: "9px 14px" }}>{f.montant_ttc ? `${f.montant_ttc.toLocaleString()} MAD` : "—"}</td>
                   <td style={{ padding: "9px 14px" }}>
                     <span style={{
                       padding: "2px 9px", borderRadius: "12px", fontSize: "11px",
