@@ -7,15 +7,32 @@ import {
 
 export function DossierAvatar({ dossier, size = 28 }) {
   const hue = dossier?.hue ?? 220;
+  const initials = dossier?.initials || "—";
+  const h2 = (hue + 40) % 360;
+  const id = `lg-${hue}`;
+  const fontSize = size < 32 ? Math.round(size * 0.38) : Math.round(size * 0.36);
   return (
-    <div className="dossier-avatar" style={{
-      width: size, height: size,
-      background: `oklch(0.94 0.04 ${hue})`,
-      color: `oklch(0.32 0.10 ${hue})`,
-      fontSize: size < 30 ? 11 : 13,
-    }}>
-      {dossier?.initials || "—"}
-    </div>
+    <svg width={size} height={size} viewBox="0 0 40 40" style={{ borderRadius: size * 0.28, display: "block", flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={`oklch(0.72 0.18 ${hue})`} />
+          <stop offset="100%" stopColor={`oklch(0.55 0.22 ${h2})`} />
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx={size * 0.28} fill={`url(#${id})`} />
+      <circle cx="32" cy="8" r="10" fill={`oklch(0.99 0.01 ${hue} / 0.12)`} />
+      <circle cx="6" cy="34" r="8" fill={`oklch(0.10 0.05 ${h2} / 0.18)`} />
+      <text
+        x="20" y="20"
+        dominantBaseline="central"
+        textAnchor="middle"
+        fill="white"
+        fontFamily="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif"
+        fontWeight="600"
+        fontSize={fontSize}
+        letterSpacing="-0.5"
+      >{initials}</text>
+    </svg>
   );
 }
 
