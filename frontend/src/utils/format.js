@@ -24,7 +24,8 @@ export function daysBetween(iso1, iso2) {
 export function enrichDossier(d) {
   const words = (d.raison_sociale || "").toUpperCase().split(/\s+/).filter(Boolean);
   const initials = words.length >= 2 ? words[0][0] + words[1][0] : (d.raison_sociale || "XX").slice(0, 2).toUpperCase();
-  const hue = Math.abs((d.raison_sociale || "").split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)) % 360;
+  const computedHue = Math.abs((d.raison_sociale || "").split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)) % 360;
+  const hue = d.logo_hue != null ? d.logo_hue : computedHue;
   return { ...d, initials, hue };
 }
 

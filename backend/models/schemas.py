@@ -21,6 +21,18 @@ class Dossier(Base):
     ville = Column(String)
     secteur = Column(String)
     regime_tva = Column(String, default="debits")
+    # Identifiants fiscaux
+    if_number = Column(String, nullable=True)
+    rc_number = Column(String, nullable=True)
+    cnss_number = Column(String, nullable=True)
+    capital_social = Column(Float, nullable=True)
+    # Coordonnées
+    adresse = Column(String, nullable=True)
+    telephone = Column(String, nullable=True)
+    email_societe = Column(String, nullable=True)
+    site_web = Column(String, nullable=True)
+    # Logo
+    logo_hue = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     factures = relationship("Facture", back_populates="dossier")
 
@@ -37,6 +49,13 @@ class Facture(Base):
     date_facture = Column(String)
     statut = Column(String, default="en_attente")
     created_at = Column(DateTime, default=datetime.utcnow)
+    type = Column(String, default="achat", nullable=True)
+    paiement = Column(String, default="en_attente", nullable=True)
+    num_facture = Column(String, nullable=True)
+    date_echeance = Column(String, nullable=True)
+    confidence = Column(Float, default=0.95, nullable=True)
+    categorie = Column(String, nullable=True)
+    compte_pcm = Column(String, nullable=True)
     dossier = relationship("Dossier", back_populates="factures")
 
 class Ecriture(Base):

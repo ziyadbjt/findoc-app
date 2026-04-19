@@ -15,8 +15,20 @@ export const getMe = (token) => axios.get(`${BASE}/auth/me`, auth(token));
 
 export const getDossiers = (token) => axios.get(`${BASE}/dossiers/`, auth(token));
 export const getDossier = (token, id) => axios.get(`${BASE}/dossiers/${id}`, auth(token));
-export const createDossier = (token, data) =>
-  axios.post(`${BASE}/dossiers/`, null, { ...auth(token), params: data });
+export const extractSocieteFromDoc = (token, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return axios.post(`${BASE}/dossiers/extract-societe`, form, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+export const createDossier = (token, data) => {
+  const params = { ...data };
+  if (params.capital_social === "" || params.capital_social == null) delete params.capital_social;
+  if (params.logo_hue == null) delete params.logo_hue;
+  return axios.post(`${BASE}/dossiers/`, null, { ...auth(token), params });
+};
 export const deleteDossier = (token, id) => axios.delete(`${BASE}/dossiers/${id}`, auth(token));
 
 export const getFactures = (token, dossierId) =>
