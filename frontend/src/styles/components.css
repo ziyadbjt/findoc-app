@@ -24,7 +24,7 @@
 .user-row { display: flex; align-items: center; gap: 10px; padding: 7px var(--sp-3); border-radius: var(--r-md); cursor: pointer; }
 .user-row:hover { background: var(--bg-2); }
 .avatar { width: 28px; height: 28px; border-radius: var(--r-full); background: linear-gradient(135deg, var(--accent) 0%, oklch(0.55 0.15 220) 100%); color: white; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
-.main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; height: 100vh; }
 .topbar { height: var(--topbar-h); display: flex; align-items: center; padding: 0 var(--sp-6); border-bottom: 1px solid var(--line-0); background: var(--bg-1); gap: var(--sp-4); flex-shrink: 0; }
 .breadcrumbs { display: flex; align-items: center; gap: 8px; font-size: var(--fs-13); color: var(--ink-2); min-width: 0; }
 .breadcrumbs .sep { color: var(--ink-3); }

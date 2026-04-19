@@ -141,7 +141,7 @@ export default function Dashboard() {
         setTiersType={setTiersType}
       />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
         <Topbar
           crumbs={crumbs}
           onOpenCmd={() => setShowCmd(true)}
