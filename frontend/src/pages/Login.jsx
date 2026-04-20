@@ -31,7 +31,6 @@ export default function Login() {
       <div style={{ display: "flex", flexDirection: "column", padding: "40px 56px", minHeight: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div className="brand-mark" style={{ width: 28, height: 28, borderRadius: 8, fontSize: 13 }}>F</div>
-          <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em" }}>FINDOC</span>
           <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", marginLeft: 6 }}>v2.4</span>
         </div>
 
@@ -45,7 +44,7 @@ export default function Login() {
               <span style={{ color: "var(--ink-2)" }}>sans ressaisie.</span>
             </h1>
             <p style={{ fontSize: 14, color: "var(--ink-2)", margin: 0, lineHeight: 1.55 }}>
-              Extraction PDF, journal SAGE 100, réconciliation bancaire et Loi 69-21 — automatisés.
+              Extraction PDF, journal SAGE 100, réconciliation bancaire et TVA automatisées.
             </p>
           </div>
 
@@ -82,7 +81,7 @@ export default function Login() {
         </div>
 
         <div style={{ fontSize: 11, color: "var(--ink-3)", display: "flex", gap: 14 }}>
-          <span>© 2026 FINDOC</span><span>Confidentialité</span><span>Loi 09-08 · conforme</span>
+          <span>© 2026 Plateforme cabinet</span><span>Confidentialité</span><span>Loi 09-08 · conforme</span>
         </div>
       </div>
 
@@ -119,7 +118,7 @@ export default function Login() {
             </div>
           </div>
           <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-            {[["PDF → journal", "en 4 secondes"], ["PCM marocain", "7 comptes auto"], ["Loi 69-21", "pénalités calculées"]].map(([a, b]) => (
+            {[["PDF → journal", "en 4 secondes"], ["PCM marocain", "7 comptes auto"], ["TVA", "déclaration préparée"]].map(([a, b]) => (
               <div key={a} style={{ padding: 12, background: "var(--bg-1)", border: "1px solid var(--line-0)", borderRadius: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 500 }}>{a}</div>
                 <div style={{ fontSize: 11, color: "var(--ink-2)" }}>{b}</div>

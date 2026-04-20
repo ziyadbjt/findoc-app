@@ -68,7 +68,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate })
               <div style={{ padding: 12, background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 10, marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <AlertTriangle size={16} style={{ color: "var(--warn-ink)", flexShrink: 0, marginTop: 1 }} />
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--warn-ink)" }}>Loi 69-21 déclenchée</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--warn-ink)" }}>Retard de paiement</div>
                   <div style={{ fontSize: 11.5, color: "var(--warn-ink)", marginTop: 2, opacity: 0.85 }}>
                     Retard de paiement · pénalité calculée au taux BAM 2,25% + 7 pts
                   </div>
@@ -168,7 +168,7 @@ function PdfMock({ f, activeField, boxes }) {
       </table>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20 }}>
         <div style={{ fontSize: 9.5, color: "#666" }}>
-          Règlement à 30 jours · En cas de retard, pénalité Loi 69-21 taux BAM + 7 pts.
+          Règlement à 30 jours · En cas de retard, délai contractuel applicable.
         </div>
         <div style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", color: "#555" }}>

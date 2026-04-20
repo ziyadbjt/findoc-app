@@ -79,7 +79,7 @@ export default function OverviewPage({ factures, dossier, bankLines, onNavigate 
         </div>
         <div className="kpi" style={{ borderColor: en_retard.length > 0 ? "var(--warn-line)" : undefined }}>
           <div className="kpi-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Retards <span style={{ fontSize: 10, color: "var(--warn-ink)", fontWeight: 500, letterSpacing: 0, textTransform: "none" }}>· Loi 69-21</span>
+            Retards
           </div>
           <div className="kpi-value"><span className="tabular" style={{ color: "var(--warn-ink)" }}>{formatMAD(en_retard_total).split(",")[0]}</span><span className="unit">MAD</span></div>
           <div className="kpi-delta">
@@ -171,7 +171,7 @@ export default function OverviewPage({ factures, dossier, bankLines, onNavigate 
             {[
               { icon: "sparkles", color: "accent", title: "Factures extraites automatiquement", sub: "98% conf. moyenne", time: "2min" },
               { icon: "check", color: "pos", title: "Rapprochement BMCE validé", sub: "5 lignes sur 8 · rapproché", time: "1h" },
-              { icon: "alert", color: "warn", title: "Loi 69-21 · retard détecté", sub: "pénalité calculée au taux BAM 2,25%", time: "3h" },
+              { icon: "alert", color: "warn", title: "Retard de paiement détecté", sub: "pénalité calculée au taux BAM 2,25%", time: "3h" },
               { icon: "mail", color: "info", title: "Relance envoyée · niveau 2", sub: "Fournisseur · en retard", time: "hier" },
               { icon: "upload", color: "", title: "Export SAGE 100 · journal", sub: "Écritures générées · prêt", time: "hier" },
             ].map((a, i) => (

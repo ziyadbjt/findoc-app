@@ -3,6 +3,7 @@ import {
   Home, FileText, GitMerge, Mail, Building2, Database, Settings,
   ChevronsUpDown, LogOut, ChevronRight, Search, Bell, Sun, Moon,
   Sparkles, AlertTriangle, Download, X, Plus, Send, RefreshCw,
+  Receipt, ShieldCheck,
 } from "lucide-react";
 
 export function DossierAvatar({ dossier, size = 28 }) {
@@ -38,21 +39,24 @@ export function DossierAvatar({ dossier, size = 28 }) {
 
 export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType }) {
   const nav = [
-    { key: "overview",        label: "Aperçu",             icon: <Home size={15} /> },
-    { key: "factures",        label: "Factures",           icon: <FileText size={15} />, badge: counts?.factures },
-    { key: "delai_paiement",  label: "Délai de paiement",  icon: <GitMerge size={15} />, badge: counts?.relances },
-    { key: "relances",        label: "Relances",           icon: <Mail size={15} /> },
-    { key: "tiers",           label: "Tiers",              icon: <Building2 size={15} /> },
-    { key: "journal",         label: "Journal SAGE",       icon: <Database size={15} /> },
+    { key: "overview", label: "Aperçu", icon: <Home size={15} /> },
+    { key: "factures", label: "Factures", icon: <FileText size={15} />, badge: counts?.factures },
+    { key: "delai_paiement", label: "Délai de paiement", icon: <GitMerge size={15} />, badge: counts?.relances },
+    { key: "relances", label: "Relances", icon: <Mail size={15} /> },
+    { key: "tiers", label: "Tiers", icon: <Building2 size={15} /> },
+    { key: "journal", label: "Journal SAGE", icon: <Database size={15} /> },
+    { key: "tva", label: "Déclaration TVA", icon: <Receipt size={15} /> },
   ];
-  const sub = [{ key: "parametres", label: "Paramètres", icon: <Settings size={15} /> }];
+  const sub = [
+    { key: "audit", label: "Audit", icon: <ShieldCheck size={15} /> },
+    { key: "parametres", label: "Paramètres", icon: <Settings size={15} /> },
+  ];
 
   return (
     <aside className="sidebar">
       <div className="sidebar-head">
         <div className="sidebar-brand">
           <div className="brand-mark">F</div>
-          <span>FINDOC</span>
           <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400, marginLeft: "auto", fontFamily: "var(--font-mono)" }}>v2.4</span>
         </div>
       </div>
@@ -68,7 +72,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
 
       <nav className="nav">
         <div className="nav-section-title">Workspace</div>
-        {nav.map(n => (
+        {nav.map((n) => (
           <div key={n.key}>
             <button className={`nav-item${route === n.key ? " active" : ""}`} onClick={() => setRoute(n.key)}>
               <span className="icon">{n.icon}</span>
@@ -77,10 +81,13 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             </button>
             {n.key === "tiers" && route === "tiers" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 14, marginBottom: 2 }}>
-                {["fournisseurs", "clients"].map(t => (
-                  <button key={t} onClick={() => setTiersType(t)}
+                {["fournisseurs", "clients"].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTiersType(t)}
                     className={`nav-item${tiersType === t ? " active" : ""}`}
-                    style={{ fontSize: 12, padding: "5px 10px" }}>
+                    style={{ fontSize: 12, padding: "5px 10px" }}
+                  >
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: tiersType === t ? "var(--accent)" : "var(--line-strong)", flexShrink: 0 }} />
                     <span style={{ textTransform: "capitalize" }}>{t}</span>
                   </button>
@@ -90,7 +97,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
           </div>
         ))}
         <div className="nav-section-title" style={{ marginTop: 12 }}>Compte</div>
-        {sub.map(n => (
+        {sub.map((n) => (
           <button key={n.key} className={`nav-item${route === n.key ? " active" : ""}`} onClick={() => setRoute(n.key)}>
             <span className="icon">{n.icon}</span>
             <span>{n.label}</span>
@@ -146,33 +153,46 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   const inputRef = useRef(null);
 
   const items = useMemo(() => [
-    { group: "Navigation", label: "Aperçu",          icon: <Home size={14} />,      action: () => onNavigate("overview"),       kbd: "G O" },
-    { group: "Navigation", label: "Factures",       icon: <FileText size={14} />,  action: () => onNavigate("factures"),       kbd: "G F" },
-    { group: "Navigation", label: "Réconciliation", icon: <GitMerge size={14} />,  action: () => onNavigate("reconciliation"), kbd: "G R" },
-    { group: "Navigation", label: "Relances",       icon: <Mail size={14} />,      action: () => onNavigate("relances") },
-    { group: "Navigation", label: "Tiers",          icon: <Building2 size={14} />, action: () => onNavigate("tiers") },
-    { group: "Actions",    label: "Uploader factures", icon: <Plus size={14} />,   action: onUpload, kbd: "U" },
-    { group: "Actions",    label: "Exporter journal SAGE 100", icon: <Download size={14} />, action: onExport },
-    { group: "Actions",    label: "Générer relance", icon: <Send size={14} />,     action: () => onNavigate("relances") },
+    { group: "Navigation", label: "Aperçu", icon: <Home size={14} />, action: () => onNavigate("overview"), kbd: "G O" },
+    { group: "Navigation", label: "Factures", icon: <FileText size={14} />, action: () => onNavigate("factures"), kbd: "G F" },
+    { group: "Navigation", label: "Relances", icon: <Mail size={14} />, action: () => onNavigate("relances") },
+    { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers") },
+    { group: "Navigation", label: "Déclaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva") },
+    { group: "Navigation", label: "Audit", icon: <ShieldCheck size={14} />, action: () => onNavigate("audit") },
+    { group: "Actions", label: "Uploader factures", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
+    { group: "Actions", label: "Exporter journal SAGE 100", icon: <Download size={14} />, action: onExport },
+    { group: "Actions", label: "Générer relance", icon: <Send size={14} />, action: () => onNavigate("relances") },
   ], [onNavigate, onUpload, onExport]);
 
   const filtered = useMemo(() => {
     if (!q.trim()) return items;
     const qq = q.toLowerCase();
-    return items.filter(it => it.label.toLowerCase().includes(qq) || it.group.toLowerCase().includes(qq));
+    return items.filter((it) => it.label.toLowerCase().includes(qq) || it.group.toLowerCase().includes(qq));
   }, [items, q]);
 
   useEffect(() => {
-    if (open) { setQ(""); setIdx(0); setTimeout(() => inputRef.current?.focus(), 20); }
+    if (open) {
+      setQ("");
+      setIdx(0);
+      setTimeout(() => inputRef.current?.focus(), 20);
+    }
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowDown") { e.preventDefault(); setIdx(i => Math.min(filtered.length - 1, i + 1)); }
-      else if (e.key === "ArrowUp")   { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-      else if (e.key === "Enter")     { e.preventDefault(); filtered[idx]?.action(); onClose(); }
+      else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setIdx((i) => Math.min(filtered.length - 1, i + 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        filtered[idx]?.action();
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -181,7 +201,7 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   if (!open) return null;
 
   const groups = {};
-  filtered.forEach(it => { (groups[it.group] ||= []).push(it); });
+  filtered.forEach((it) => { (groups[it.group] ||= []).push(it); });
   let runIdx = -1;
 
   return (
@@ -190,22 +210,29 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
       <div className="cmdk">
         <div className="cmdk-input-wrap">
           <Search size={15} style={{ color: "var(--ink-2)" }} />
-          <input ref={inputRef} className="cmdk-input"
+          <input
+            ref={inputRef}
+            className="cmdk-input"
             placeholder="Tapez une action ou une page…"
-            value={q} onChange={e => { setQ(e.target.value); setIdx(0); }} />
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setIdx(0); }}
+          />
           <kbd style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--ink-3)", background: "var(--bg-2)", border: "1px solid var(--line-1)", borderRadius: 4, padding: "1px 5px" }}>esc</kbd>
         </div>
         <div className="cmdk-list">
           {Object.entries(groups).map(([g, list]) => (
             <div key={g}>
               <div className="cmdk-group-label">{g}</div>
-              {list.map(it => {
+              {list.map((it) => {
                 runIdx++;
                 const active = runIdx === idx;
                 return (
-                  <div key={it.label} className={`cmdk-item${active ? " active" : ""}`}
+                  <div
+                    key={it.label}
+                    className={`cmdk-item${active ? " active" : ""}`}
                     onMouseEnter={() => setIdx(runIdx)}
-                    onClick={() => { it.action(); onClose(); }}>
+                    onClick={() => { it.action(); onClose(); }}
+                  >
                     <span className="icon">{it.icon}</span>
                     <span>{it.label}</span>
                     {it.kbd && <span className="kbd">{it.kbd}</span>}
@@ -237,7 +264,7 @@ export function NotificationsPanel({ open, onClose, notifications }) {
           <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
         </div>
         <div className="drawer-body" style={{ padding: 16 }}>
-          {notifications.map(n => (
+          {notifications.map((n) => (
             <div key={n.id} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--line-1)" }}>
               <div style={{ width: 28, height: 28, borderRadius: 7, background: `var(--${colorFor(n.kind)}-bg)`, color: `var(--${colorFor(n.kind)}-ink)`, display: "grid", placeItems: "center" }}>
                 {iconFor(n.kind)}
@@ -257,10 +284,10 @@ export function NotificationsPanel({ open, onClose, notifications }) {
 
 export function TweaksPanel({ onClose, accent, setAccent, density, setDensity, theme, setTheme, layout, setLayout }) {
   const swatches = [
-    { key: "teal",   color: "oklch(0.68 0.13 195)" },
+    { key: "teal", color: "oklch(0.68 0.13 195)" },
     { key: "violet", color: "oklch(0.62 0.16 290)" },
-    { key: "amber",  color: "oklch(0.72 0.14 65)" },
-    { key: "ink",    color: "oklch(0.22 0.012 250)" },
+    { key: "amber", color: "oklch(0.72 0.14 65)" },
+    { key: "ink", color: "oklch(0.22 0.012 250)" },
   ];
   return (
     <div className="tweaks-panel">
@@ -272,16 +299,15 @@ export function TweaksPanel({ onClose, accent, setAccent, density, setDensity, t
         <div className="tweak-row">
           <div className="tlabel">Accent</div>
           <div className="swatch-row">
-            {swatches.map(s => (
-              <div key={s.key} className={`swatch${accent === s.key ? " active" : ""}`}
-                onClick={() => setAccent(s.key)} style={{ background: s.color }} title={s.key} />
+            {swatches.map((s) => (
+              <div key={s.key} className={`swatch${accent === s.key ? " active" : ""}`} onClick={() => setAccent(s.key)} style={{ background: s.color }} title={s.key} />
             ))}
           </div>
         </div>
         <div className="tweak-row">
           <div className="tlabel">Densité</div>
           <div className="segmented">
-            {["compact", "balanced", "airy"].map(d => (
+            {["compact", "balanced", "airy"].map((d) => (
               <button key={d} className={density === d ? "active" : ""} onClick={() => setDensity(d)}>
                 {d === "compact" ? "Compact" : d === "balanced" ? "Équilibré" : "Aéré"}
               </button>
