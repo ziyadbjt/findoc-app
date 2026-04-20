@@ -68,7 +68,7 @@ export const MOCK_BANK_LINES = [
 
 export const MOCK_NOTIFICATIONS = [
   { id: 1, kind: "ai", ts: "il y a 2min", title: "Factures extraites automatiquement", body: "98% de confiance moyenne" },
-  { id: 2, kind: "warn", ts: "il y a 14min", title: "Loi 69-21 déclenchée", body: "Retard détecté · pénalité calculée" },
+  { id: 2, kind: "warn", ts: "il y a 14min", title: "Retard détecté", body: "Retard détecté · pénalité calculée" },
   { id: 3, kind: "reconcile", ts: "il y a 1h", title: "Relevé bancaire importé", body: "Correspondances à valider" },
   { id: 4, kind: "export", ts: "il y a 3h", title: "Export SAGE 100 prêt", body: "Journal · écritures générées" },
 ];

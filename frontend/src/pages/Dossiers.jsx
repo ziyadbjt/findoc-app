@@ -439,7 +439,7 @@ export default function Dossiers() {
       <header style={{ padding: "16px 40px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", background: "var(--bg-1)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div className="brand-mark">F</div>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>FINDOC</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Espace dossiers</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{user?.nom || "Ziyad B."}</div>

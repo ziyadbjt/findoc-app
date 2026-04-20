@@ -31,7 +31,7 @@ function RetardsTab({ factures }) {
       <div className="card" style={{ padding:40, textAlign:"center" }}>
         <Check size={28} style={{ color:"var(--pos-ink)", margin:"0 auto 12px" }} />
         <div style={{ fontSize:14, fontWeight:500, marginBottom:4 }}>Aucun retard détecté</div>
-        <div style={{ fontSize:12.5, color:"var(--ink-2)" }}>Toutes les factures sont dans les délais Loi 69-21.</div>
+        <div style={{ fontSize:12.5, color:"var(--ink-2)" }}>Toutes les factures sont dans les délais réglementaires.</div>
       </div>
     );
   }
@@ -43,7 +43,7 @@ function RetardsTab({ factures }) {
         {[
           { label:"Factures en retard",   val:overdue.length,              color:"var(--warn-ink)", unit:"" },
           { label:"Montant total dû",      val:formatMAD(totalOverdue).split(",")[0], color:"var(--ink-0)", unit:"MAD" },
-          { label:"Pénalités Loi 69-21",   val:formatMAD(totalPenalties).split(",")[0], color:totalPenalties>1?"var(--neg-ink)":"var(--ink-3)", unit:"MAD" },
+          { label:"Pénalités de retard",   val:formatMAD(totalPenalties).split(",")[0], color:totalPenalties>1?"var(--neg-ink)":"var(--ink-3)", unit:"MAD" },
         ].map(k => (
           <div key={k.label} className="kpi">
             <div className="kpi-label">{k.label}</div>
@@ -295,14 +295,14 @@ function ConventionsTab() {
 
 export default function DelaiPaiementPage({ factures }) {
   const [tab, setTab] = useState("retards");
-  const TABS = [{ key:"retards", label:"Retards · Loi 69-21" }, { key:"conventions", label:"Conventions" }];
+  const TABS = [{ key:"retards", label:"Retards" }, { key:"conventions", label:"Conventions" }];
 
   return (
     <div className="page-inner">
       <div className="page-header">
         <div>
           <h1 className="page-title">Délai de paiement</h1>
-          <p className="page-subtitle">Loi 69-21 · Analyse des retards et conventions</p>
+          <p className="page-subtitle">Analyse des retards et conventions</p>
         </div>
       </div>
 

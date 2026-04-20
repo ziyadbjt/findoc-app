@@ -38,7 +38,7 @@ function RelanceRow({ f, overdueDays, penalty, selected, onSelect }) {
         </div>
         {penalty > 0 && (
           <div style={{ fontSize: 11, color: "var(--neg-ink)", marginTop: 3 }}>
-            Pénalité Loi 69-21 · {formatMAD(penalty).split(",")[0]} MAD
+            Pénalité de retard · {formatMAD(penalty).split(",")[0]} MAD
           </div>
         )}
       </div>
@@ -80,7 +80,7 @@ ${openings[tone]} le(s) facture(s) suivante(s) demeurant impayée(s) :
 
 ${refs}
 
-Montant total dû : ${formatMAD(total).split(",")[0]} MAD TTC${penalties > 0.5 ? `\nPénalités Loi 69-21 (taux BAM ${(BAM_RATE * 100).toFixed(2)}% + 3%) : ${formatMAD(penalties).split(",")[0]} MAD` : ""}
+Montant total dû : ${formatMAD(total).split(",")[0]} MAD TTC${penalties > 0.5 ? `\nPénalités de retard (taux BAM ${(BAM_RATE * 100).toFixed(2)}% + 3%) : ${formatMAD(penalties).split(",")[0]} MAD` : ""}
 
 ${closings[tone]}
 
@@ -149,7 +149,7 @@ export default function RelancesPage({ factures }) {
         <div className="card" style={{ padding: 40, textAlign: "center" }}>
           <Check size={28} style={{ color: "var(--pos-ink)", margin: "0 auto 12px" }} />
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Aucun retard détecté</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Toutes les factures sont dans les délais Loi 69-21.</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Toutes les factures sont dans les délais réglementaires.</div>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 12, alignItems: "start" }}>
@@ -206,7 +206,7 @@ export default function RelancesPage({ factures }) {
               {level === 3 && (
                 <div style={{ padding: "8px 12px", background: "var(--neg-bg)", borderRadius: 8, fontSize: 12, color: "var(--neg-ink)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <AlertTriangle size={13} />
-                  Mise en demeure — document à valeur légale selon Loi 69-21
+                  Mise en demeure — document à valeur légale selon la réglementation en vigueur
                 </div>
               )}
 
