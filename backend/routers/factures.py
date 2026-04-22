@@ -4,6 +4,7 @@ import shutil
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import get_db
@@ -13,17 +14,37 @@ from services.claude import generer_ecritures
 from services.document_ai import extract_facture
 from services.export import build_export_workbook
 
-
-router = APIRouter(prefix="/factures", tags=["factures"])
+router = APIRouter(prefix="/factures", tags=["Factures"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-@router.post("/{dossier_id}/upload")
+class UploadFactureItem(BaseModel):
+    id: int | None = None
+    fichier: str
+    fournisseur: str | None = None
+    num_facture: str | None = None
+    montant_ttc: float | None = None
+    statut: str
+    source_ai: str | None = None
+    confiance: float | None = None
+
+
+class UploadFacturesResponse(BaseModel):
+    total: int
+    resultats: list[UploadFactureItem]
+
+
+@router.post(
+    "/{dossier_id}/upload",
+    response_model=UploadFacturesResponse,
+    summary="Uploader et analyser des factures",
+    description="Importe un ou plusieurs PDF/images, lance l'extraction IA, puis genere les ecritures.",
+)
 async def upload_factures(
     dossier_id: int,
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(..., description="Liste de fichiers PDF, PNG, JPG ou JPEG"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -88,12 +109,20 @@ async def upload_factures(
     return {"total": len(files), "resultats": results}
 
 
-@router.get("/{dossier_id}")
+@router.get(
+    "/{dossier_id}",
+    summary="Lister les factures d'un dossier",
+    description="Retourne toutes les factures enregistrees pour le dossier cible.",
+)
 def list_factures(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
 
 
-@router.get("/{dossier_id}/ecritures")
+@router.get(
+    "/{dossier_id}/ecritures",
+    summary="Lister les ecritures generees",
+    description="Retourne les ecritures comptables rattachees aux factures du dossier.",
+)
 def list_ecritures(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     factures = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
     facture_ids = [facture.id for facture in factures]
@@ -102,7 +131,11 @@ def list_ecritures(dossier_id: int, db: Session = Depends(get_db), current_user=
     return db.query(Ecriture).filter(Ecriture.facture_id.in_(facture_ids)).all()
 
 
-@router.get("/{dossier_id}/export")
+@router.get(
+    "/{dossier_id}/export",
+    summary="Exporter le dossier en Excel",
+    description="Genere un fichier Excel avec journal, balance, TVA, penalites et grand livre.",
+)
 def export_journal(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     factures = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
     facture_ids = [facture.id for facture in factures]

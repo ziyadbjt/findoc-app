@@ -2,6 +2,7 @@ import os
 import shutil
 
 from fastapi import APIRouter, Depends, File, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from models.database import get_db
@@ -10,8 +11,7 @@ from routers.auth import get_current_user
 from services.bank_ai import extract_bank_statement
 from services.export import calculer_penalite, calculer_retard
 
-
-router = APIRouter(prefix="/reconciliation", tags=["reconciliation"])
+router = APIRouter(prefix="/reconciliation", tags=["Reconciliation bancaire"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -25,7 +25,20 @@ DELAIS = {
 }
 
 
-@router.get("/{dossier_id}")
+class ReconciliationSummary(BaseModel):
+    total_factures: int
+    retards_loi_6921: int
+    total_penalites_mad: float
+    taux_bam_applique: float
+    resultats: list[dict]
+
+
+@router.get(
+    "/{dossier_id}",
+    response_model=ReconciliationSummary,
+    summary="Calculer l'etat de reconciliation et de retard",
+    description="Retourne les echeances, retards et penalites Loi 69-21 pour un dossier.",
+)
 def reconcilier(
     dossier_id: int,
     taux_bam: float = 2.25,
@@ -71,10 +84,14 @@ def reconcilier(
     }
 
 
-@router.post("/{dossier_id}/upload")
+@router.post(
+    "/{dossier_id}/upload",
+    summary="Uploader un releve bancaire et proposer des correspondances",
+    description="Analyse un releve bancaire puis suggere des rapprochements avec les factures existantes.",
+)
 async def upload_releve_bancaire(
     dossier_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile = File(..., description="Releve bancaire PDF, image ou fichier texte"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

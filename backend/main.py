@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models import schemas
 from models.database import engine
-from routers import auth, chat, dossiers, factures, reconciliation
+from routers import admin, auth, chat, dossiers, factures, reconciliation
 
 
 schemas.Base.metadata.create_all(bind=engine)
@@ -29,7 +29,22 @@ with sqlite3.connect(_DB_PATH) as connection:
         if col not in existing:
             connection.execute(f"ALTER TABLE dossiers ADD COLUMN {col} {typ}")
 
-app = FastAPI(title="FinDoc API")
+app = FastAPI(
+    title="FinDoc Backend API",
+    summary="API de gestion documentaire et comptable pour FinDoc.",
+    description=(
+        "Cette API centralise les flux principaux de FinDoc : authentification, dossiers, "
+        "upload et extraction de factures, reconciliation bancaire, chat IA et export Excel.\n\n"
+        "Ordre de lecture recommande dans /docs :\n"
+        "1. Authentification\n"
+        "2. Dossiers\n"
+        "3. Factures\n"
+        "4. Reconciliation bancaire\n"
+        "5. Chat IA"
+    ),
+    version="2.4.0",
+    contact={"name": "FinDoc", "email": "support@findoc.local"},
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,11 +63,22 @@ app.include_router(dossiers.router)
 app.include_router(factures.router)
 app.include_router(reconciliation.router)
 app.include_router(chat.router)
+app.include_router(admin.router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    tags=["system"],
+    summary="Verifier que l'API est en ligne",
+    description="Retourne un message simple confirmant que le backend FinDoc fonctionne.",
+)
 def root():
-    return {"message": "FinDoc API is running"}
+    return {
+        "message": "FinDoc API is running",
+        "docs": "/docs",
+        "admin": "/admin",
+        "status": "/admin/status",
+    }
 
 
 if __name__ == "__main__":
