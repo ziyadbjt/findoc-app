@@ -36,7 +36,7 @@ export const getFactures = (token, dossierId) =>
 
 export const uploadFactures = (token, dossierId, files) => {
   const form = new FormData();
-  files.forEach((f) => form.append("files", f));
+  files.forEach((file) => form.append("files", file));
   return axios.post(`${BASE}/factures/${dossierId}/upload`, form, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -54,21 +54,62 @@ export const exportJournal = (token, dossierId) =>
 export const getReconciliation = (token, dossierId) =>
   axios.get(`${BASE}/reconciliation/${dossierId}`, auth(token));
 
-// Mock bank lines — replace when backend adds /bank-lines endpoint
-export const MOCK_BANK_LINES = [
-  { id: "tx1", date: "2026-03-05", libelle: "VIR MARPRINT SARL REF-0114", montant: -14880.0, matched_to: null },
-  { id: "tx2", date: "2026-03-20", libelle: "VIR ATECH DIG — ATC260318", montant: -5760.0, matched_to: null },
-  { id: "tx3", date: "2026-03-30", libelle: "VIR ATLAS LOCATION LOYER MARS", montant: -21600.0, matched_to: null },
-  { id: "tx4", date: "2026-04-11", libelle: "VIR ATECH DIGITAL MAINT", montant: -8640.0, matched_to: null },
-  { id: "tx5", date: "2026-04-03", libelle: "VIR SONATRACH — carb. mars", montant: -38520.0, matched_to: null },
-  { id: "tx6", date: "2026-04-08", libelle: "PRLV CNSS MARS 2026", montant: -12450.0, matched_to: null },
-  { id: "tx7", date: "2026-04-09", libelle: "REC CLIENT VICAT CIMENTS MA", montant: 84200.0, matched_to: null },
-  { id: "tx8", date: "2026-04-12", libelle: "FRAIS BANCAIRES TRIM.", montant: -450.0, matched_to: null },
-];
+export const uploadBankStatement = (token, dossierId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return axios.post(`${BASE}/reconciliation/${dossierId}/upload`, form, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+export async function sendChatMessage(token, payload, handlers = {}) {
+  const response = await fetch(`${BASE}/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error("Chat indisponible");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const emitEvent = (rawBlock) => {
+    const lines = rawBlock.split("\n").filter(Boolean);
+    const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim() || "message";
+    const dataLine = lines.find((line) => line.startsWith("data:"))?.slice(5).trim() || "{}";
+    let data = {};
+    try {
+      data = JSON.parse(dataLine);
+    } catch {
+      data = {};
+    }
+    if (event === "chunk" && data.text) handlers.onChunk?.(data.text);
+    if (event === "done") handlers.onDone?.(data);
+    if (event === "ready") handlers.onReady?.(data);
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    blocks.forEach(emitEvent);
+  }
+
+  if (buffer.trim()) emitEvent(buffer);
+}
 
 export const MOCK_NOTIFICATIONS = [
   { id: 1, kind: "ai", ts: "il y a 2min", title: "Factures extraites automatiquement", body: "98% de confiance moyenne" },
-  { id: 2, kind: "warn", ts: "il y a 14min", title: "Retard détecté", body: "Retard détecté · pénalité calculée" },
-  { id: 3, kind: "reconcile", ts: "il y a 1h", title: "Relevé bancaire importé", body: "Correspondances à valider" },
-  { id: 4, kind: "export", ts: "il y a 3h", title: "Export SAGE 100 prêt", body: "Journal · écritures générées" },
+  { id: 2, kind: "warn", ts: "il y a 14min", title: "Retard detecte", body: "Retard detecte · penalite calculee" },
+  { id: 3, kind: "reconcile", ts: "il y a 1h", title: "Releve bancaire importe", body: "Correspondances a valider" },
+  { id: 4, kind: "export", ts: "il y a 3h", title: "Export SAGE 100 pret", body: "Journal · ecritures generees" },
 ];

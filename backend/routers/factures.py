@@ -1,35 +1,41 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+import io
+import os
+import shutil
+
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+
 from models.database import get_db
-from models.schemas import Facture, Ecriture
+from models.schemas import Ecriture, Facture
 from routers.auth import get_current_user
-from services.document_ai import extract_facture
 from services.claude import generer_ecritures
-import os, shutil, io
-import openpyxl
+from services.document_ai import extract_facture
+from services.export import build_export_workbook
+
 
 router = APIRouter(prefix="/factures", tags=["factures"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
 @router.post("/{dossier_id}/upload")
 async def upload_factures(
     dossier_id: int,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     results = []
     for file in files:
-        if not file.filename.endswith(".pdf"):
+        if not file.filename.lower().endswith((".pdf", ".png", ".jpg", ".jpeg")):
             results.append({"fichier": file.filename, "statut": "erreur"})
             continue
 
         path = f"{UPLOAD_DIR}/{dossier_id}_{file.filename}"
-        with open(path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+        with open(path, "wb") as handle:
+            shutil.copyfileobj(file.file, handle)
 
         extracted = extract_facture(path, file.filename)
 
@@ -42,74 +48,73 @@ async def upload_factures(
             tva=extracted["tva"],
             montant_ttc=extracted["montant_ttc"],
             date_facture=extracted["date_facture"],
-            statut="traité"
+            date_echeance=extracted.get("date_echeance"),
+            num_facture=extracted.get("num_facture"),
+            confidence=extracted.get("confidence"),
+            compte_pcm=extracted.get("compte_pcm"),
+            statut="traite",
+            paiement="en_attente",
         )
         db.add(facture)
         db.commit()
         db.refresh(facture)
 
-        ecritures = generer_ecritures(extracted)
-        for e in ecritures:
-            ecriture = Ecriture(
-                facture_id=facture.id,
-                compte_pcm=e["compte_pcm"],
-                libelle=e["libelle"],
-                debit=e["debit"],
-                credit=e["credit"]
+        ecritures = generer_ecritures({**extracted, "type": facture.type})
+        for row in ecritures:
+            db.add(
+                Ecriture(
+                    facture_id=facture.id,
+                    compte_pcm=row["compte_pcm"],
+                    libelle=row["libelle"],
+                    debit=row["debit"],
+                    credit=row["credit"],
+                )
             )
-            db.add(ecriture)
         db.commit()
 
-        results.append({
-            "id": facture.id,
-            "fichier": file.filename,
-            "fournisseur": extracted["fournisseur"],
-            "montant_ttc": extracted["montant_ttc"],
-            "statut": "traité"
-        })
+        results.append(
+            {
+                "id": facture.id,
+                "fichier": file.filename,
+                "fournisseur": extracted["fournisseur"],
+                "num_facture": extracted.get("num_facture"),
+                "montant_ttc": extracted["montant_ttc"],
+                "statut": "traite",
+                "source_ai": extracted.get("source_ai"),
+                "confiance": extracted.get("confidence"),
+            }
+        )
 
     return {"total": len(files), "resultats": results}
+
 
 @router.get("/{dossier_id}")
 def list_factures(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
 
+
 @router.get("/{dossier_id}/ecritures")
 def list_ecritures(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     factures = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
-    facture_ids = [f.id for f in factures]
+    facture_ids = [facture.id for facture in factures]
+    if not facture_ids:
+        return []
     return db.query(Ecriture).filter(Ecriture.facture_id.in_(facture_ids)).all()
+
 
 @router.get("/{dossier_id}/export")
 def export_journal(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     factures = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
-    facture_ids = [f.id for f in factures]
-    ecritures = db.query(Ecriture).filter(Ecriture.facture_id.in_(facture_ids)).all()
+    facture_ids = [facture.id for facture in factures]
+    ecritures = db.query(Ecriture).filter(Ecriture.facture_id.in_(facture_ids)).all() if facture_ids else []
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Journal SAGE 100"
-    ws.append(["N° Facture", "Date", "Compte PCM", "Code Tiers", "Libellé", "Débit (MAD)", "Crédit (MAD)"])
-
-    facture_map = {f.id: f for f in factures}
-    for e in ecritures:
-        f = facture_map.get(e.facture_id)
-        ws.append([
-            f.nom_fichier if f else "",
-            f.date_facture if f else "",
-            e.compte_pcm,
-            f.code_tiers if f else "",
-            e.libelle,
-            e.debit or "",
-            e.credit or ""
-        ])
-
+    workbook = build_export_workbook(factures, ecritures)
     stream = io.BytesIO()
-    wb.save(stream)
+    workbook.save(stream)
     stream.seek(0)
 
     return StreamingResponse(
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=journal_dossier_{dossier_id}.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename=journal_dossier_{dossier_id}.xlsx"},
     )

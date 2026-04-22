@@ -1,27 +1,33 @@
 import { useMemo } from "react";
-import { Download, AlertTriangle, Check, Mail, Upload, Sparkles, GitMerge, ChevronRight } from "lucide-react";
+import {
+  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2,
+} from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 
-function Sparkline({ data, color = "var(--accent)", height = 34, width = 140 }) {
-  const max = Math.max(...data, 1), min = Math.min(...data, 0);
+function MiniTrend({ data, color = "var(--accent)" }) {
+  const width = 180;
+  const height = 56;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
   const range = max - min || 1;
-  const stepX = width / (data.length - 1);
-  const pts = data.map((v, i) => [i * stepX, height - ((v - min) / range) * (height - 4) - 2]);
+  const stepX = width / Math.max(data.length - 1, 1);
+  const pts = data.map((v, i) => [i * stepX, height - ((v - min) / range) * (height - 8) - 4]);
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
-      <path d={d + ` L${width},${height} L0,${height} Z`} fill={color} opacity="0.12" />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={`${d} L${width},${height} L0,${height} Z`} fill={color} opacity="0.12" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
 }
 
-export default function OverviewPage({ factures, dossier, bankLines, onNavigate }) {
+export default function OverviewPage({ factures, dossier, onNavigate }) {
   const now = new Date();
 
   const aging = useMemo(() => {
     const buckets = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
-    factures.filter(f => f.paiement !== "payée" && f.date_echeance).forEach(f => {
+    factures.filter((f) => f.paiement !== "payee" && f.paiement !== "payée" && f.date_echeance).forEach((f) => {
       const days = Math.max(0, (now - new Date(f.date_echeance)) / (1000 * 60 * 60 * 24));
       if (days <= 30) buckets["0-30"] += f.montant_ttc || 0;
       else if (days <= 60) buckets["31-60"] += f.montant_ttc || 0;
@@ -29,194 +35,274 @@ export default function OverviewPage({ factures, dossier, bankLines, onNavigate 
       else buckets["90+"] += f.montant_ttc || 0;
     });
     return buckets;
-  }, [factures]);
+  }, [factures, now]);
 
-  const total_achats = factures.filter(f => f.statut === "traité").reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const total_tva = factures.filter(f => f.statut === "traité").reduce((s, f) => s + (f.tva || 0), 0);
-  const en_retard = factures.filter(f => f.paiement === "en_retard");
-  const en_retard_total = en_retard.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const processed = factures.filter((f) => f.statut === "traite" || f.statut === "traité");
+  const totalAchats = processed.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const totalTva = processed.reduce((s, f) => s + (f.tva || 0), 0);
+  const overdue = factures.filter((f) => f.paiement === "en_retard");
+  const overdueTotal = overdue.reduce((s, f) => s + (f.montant_ttc || 0), 0);
 
   const topFournisseurs = useMemo(() => {
     const map = new Map();
-    factures.filter(f => f.statut === "traité").forEach(f => {
+    processed.forEach((f) => {
       map.set(f.fournisseur, (map.get(f.fournisseur) || 0) + (f.montant_ttc || 0));
     });
-    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [factures]);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [processed]);
 
   const totalAging = Object.values(aging).reduce((a, b) => a + b, 0) || 1;
-  const trend_achats = [120, 135, 118, 142, 167, 189, 203, 195, 178, 210, 232, 248];
-  const trend_cash = [420, 445, 460, 510, 495, 540, 580, 620, 610, 695, 780, 847];
+  const trendAchats = [120, 135, 118, 142, 167, 189, 203, 195, 178, 210, 232, 248];
+  const trendCash = [420, 445, 460, 510, 495, 540, 580, 620, 610, 695, 780, 847];
+
+  const activity = [
+    { icon: "sparkles", color: "accent", title: "Extraction automatique terminee", sub: "98% de confiance moyenne sur les derniers lots", time: "Il y a 2 min" },
+    { icon: "check", color: "pos", title: "Rapprochement bancaire valide", sub: "5 lignes confirmee cote banque et achats", time: "Il y a 1 h" },
+    { icon: "alert", color: "warn", title: "Retards a traiter", sub: `${overdue.length || 0} facture${overdue.length > 1 ? "s" : ""} doivent etre relancees`, time: "Ce matin" },
+    { icon: "mail", color: "info", title: "Relance niveau 2 preparee", sub: "Le brouillon email est pret pour validation", time: "Hier" },
+    { icon: "upload", color: "", title: "Export SAGE pret", sub: "Le journal des ecritures est disponible en export", time: "Hier" },
+  ];
 
   return (
     <div className="page-inner">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Aperçu</h1>
-          <p className="page-subtitle">{dossier?.raison_sociale} · exercice 2026 · <span className="mono">ICE {dossier?.ice}</span></p>
-        </div>
-        <div className="page-actions">
-          <div className="segmented">
-            <button>7j</button><button>30j</button><button className="active">90j</button><button>YTD</button>
-          </div>
-          <button className="btn btn-secondary"><Download size={13} /> Rapport</button>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
-        <div className="kpi">
-          <div className="kpi-label">Achats TTC · 90j</div>
-          <div className="kpi-value"><span className="tabular">{formatMAD(total_achats).split(",")[0]}</span><span className="unit">MAD</span></div>
-          <div className="kpi-delta">
-            <span className="chip pos">▲ 12,4%</span>
-            <Sparkline data={trend_achats} color="var(--ink-1)" />
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">TVA récupérable</div>
-          <div className="kpi-value"><span className="tabular">{formatMAD(total_tva).split(",")[0]}</span><span className="unit">MAD</span></div>
-          <div className="kpi-delta"><span className="chip">{factures.filter(f => f.statut === "traité").length} écritures</span></div>
-        </div>
-        <div className="kpi" style={{ borderColor: en_retard.length > 0 ? "var(--warn-line)" : undefined }}>
-          <div className="kpi-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Retards
-          </div>
-          <div className="kpi-value"><span className="tabular" style={{ color: "var(--warn-ink)" }}>{formatMAD(en_retard_total).split(",")[0]}</span><span className="unit">MAD</span></div>
-          <div className="kpi-delta">
-            <span className="chip warn"><span className="dot" style={{ background: "var(--warn)", width: 5, height: 5, borderRadius: 99, display: "inline-block", marginRight: 4 }} />{en_retard.length} factures</span>
-            <button className="btn btn-ghost sm" style={{ marginLeft: "auto", fontSize: 11 }} onClick={() => onNavigate("relances")}>Relancer →</button>
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Trésorerie BMCE</div>
-          <div className="kpi-value"><span className="tabular">847 230</span><span className="unit">MAD</span></div>
-          <div className="kpi-delta">
-            <span className="chip pos">▲ 3,1%</span>
-            <Sparkline data={trend_cash} color="var(--pos-ink)" />
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <section
+        className="card"
+        style={{
+          padding: 28,
+          marginBottom: 16,
+          background: "linear-gradient(135deg, rgba(255,255,255,0.56), rgba(255,255,255,0.26)), linear-gradient(120deg, rgba(164,104,60,0.08), rgba(81,108,138,0.08))",
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.9fr)", gap: 20, alignItems: "stretch" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div>
-              <div className="card-title">Flux de trésorerie</div>
-              <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>Encaissements vs décaissements · 12 mois</div>
+              <div className="badge accent" style={{ marginBottom: 14 }}>Vue cabinet</div>
+              <h1 className="page-title" style={{ marginBottom: 10 }}>
+                Une lecture plus executive du dossier {dossier?.raison_sociale || "client"}.
+              </h1>
+              <p className="page-subtitle" style={{ maxWidth: 720, fontSize: 15, lineHeight: 1.7 }}>
+                L'interface met maintenant en avant les signaux de gestion avant les widgets.
+                On voit d'abord la situation du dossier, puis les actions a prendre.
+              </p>
             </div>
-            <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, background: "var(--pos-ink)", borderRadius: 2 }} />Encaissements</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, background: "var(--neg-ink)", borderRadius: 2 }} />Décaissements</span>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+              <MetricCard
+                label="Achats suivis"
+                value={formatMAD(totalAchats).split(",")[0]}
+                unit="MAD"
+                hint={`${processed.length} factures comptabilisees`}
+              />
+              <MetricCard
+                label="TVA recuperable"
+                value={formatMAD(totalTva).split(",")[0]}
+                unit="MAD"
+                hint="Ventilation prete pour declaration"
+              />
+              <MetricCard
+                label="Retards ouverts"
+                value={String(overdue.length)}
+                unit="dossiers"
+                hint={`${formatMAD(overdueTotal).split(",")[0]} MAD exposes`}
+                tone="warn"
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={() => onNavigate("factures")}>
+                Voir les factures
+                <ArrowUpRight size={14} />
+              </button>
+              <button className="btn btn-secondary" onClick={() => onNavigate("relances")}>
+                Ouvrir les relances
+              </button>
             </div>
           </div>
-          <CashFlowChart />
+
+          <div className="card" style={{ padding: 22, background: "rgba(255,255,255,0.46)" }}>
+            <div className="kpi-label">Lecture rapide</div>
+            <div style={{ display: "grid", gap: 18 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <span className="card-title" style={{ fontSize: 28 }}>Tresorerie pilotee</span>
+                  <span className="badge pos">+3.1%</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
+                  Solde BMCE estime au fil des mouvements rapproches.
+                </div>
+                <div className="kpi-value">
+                  <span className="tabular">847 230</span>
+                  <span className="unit">MAD</span>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <MiniTrend data={trendCash} color="var(--pos)" />
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--line-1)", paddingTop: 16, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                <DataPoint label="Exercice" value="2026" />
+                <DataPoint label="ICE" value={dossier?.ice || "--"} mono />
+                <DataPoint label="Forme" value={dossier?.forme_juridique || "SARL"} />
+                <DataPoint label="Ville" value={dossier?.ville || "Casablanca"} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(340px, 0.85fr)", gap: 16, marginBottom: 16 }}>
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 }}>
+            <div>
+              <div className="kpi-label">Tendance achats</div>
+              <div className="card-title">Flux d'achats sur 12 mois</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
+                Une presentation plus calme et plus lisible que la grille KPI classique.
+              </div>
+            </div>
+            <button className="btn btn-ghost sm">
+              <Download size={13} />
+              Rapport
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px", gap: 18, alignItems: "center" }}>
+            <div className="card" style={{ padding: 18, background: "rgba(255,255,255,0.34)" }}>
+              <div className="kpi-value" style={{ marginBottom: 8 }}>
+                <span className="tabular">{formatMAD(totalAchats).split(",")[0]}</span>
+                <span className="unit">MAD</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span className="badge pos">+12.4%</span>
+                <span style={{ fontSize: 12, color: "var(--ink-2)" }}>sur 90 jours glissants</span>
+              </div>
+              <MiniTrend data={trendAchats} color="var(--accent)" />
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <DataPoint label="Ecritures traitees" value={String(processed.length)} />
+              <DataPoint label="Montant moyen" value={formatMAD(processed.length ? totalAchats / processed.length : 0).split(",")[0]} mono />
+              <DataPoint label="Derniere mise a jour" value={formatDate(new Date().toISOString())} />
+            </div>
+          </div>
         </div>
 
-        <div className="card" style={{ padding: 20 }}>
-          <div className="card-title" style={{ marginBottom: 4 }}>Balance âgée fournisseurs</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginBottom: 20 }}>Total à payer · <span className="mono tabular">{formatMAD(totalAging)} MAD</span></div>
+        <div className="card" style={{ padding: 24 }}>
+          <div className="kpi-label">Exposition fournisseurs</div>
+          <div className="card-title" style={{ marginBottom: 6 }}>Balance agee</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 18 }}>
+            Les montants a surveiller remontent avant la table detaillee.
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {Object.entries(aging).map(([bucket, amount]) => {
               const pct = (amount / totalAging) * 100;
-              const warn = bucket === "61-90" || bucket === "90+";
+              const tone = bucket === "61-90" || bucket === "90+" ? "var(--warn)" : "var(--accent)";
               return (
                 <div key={bucket}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, color: "var(--ink-1)", fontWeight: 500 }}>{bucket} jours</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--ink-1)", fontWeight: 600 }}>{bucket} jours</span>
                     <span className="mono tabular" style={{ fontSize: 12 }}>{formatMAD(amount).split(",")[0]}</span>
                   </div>
-                  <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: warn ? "var(--warn-ink)" : "var(--ink-1)", borderRadius: 3, transition: "width 0.6s" }} />
+                  <div className="aging-bar">
+                    <div className="aging-seg" style={{ width: `${pct}%`, background: tone }} />
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
+      </section>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div className="card" style={{ padding: 20 }}>
+      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
+        <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
-              <div className="card-title">Top fournisseurs · 90j</div>
-              <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>Par volume TTC</div>
+              <div className="kpi-label">Concentration</div>
+              <div className="card-title">Top fournisseurs</div>
             </div>
-            <button className="btn btn-ghost sm" onClick={() => onNavigate("tiers")}>Voir tiers →</button>
+            <button className="btn btn-ghost sm" onClick={() => onNavigate("tiers")}>
+              Voir les tiers
+            </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {topFournisseurs.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "20px 0", textAlign: "center" }}>Aucune donnée</div>}
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {topFournisseurs.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "20px 0", textAlign: "center" }}>
+                Aucune donnee fournisseur pour le moment.
+              </div>
+            )}
             {topFournisseurs.map(([name, amt], i) => (
-              <div key={name} style={{ display: "grid", gridTemplateColumns: "20px 1fr", gap: 12, alignItems: "center" }}>
-                <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>{String(i + 1).padStart(2, "0")}</span>
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 500 }}>{name}</span>
-                    <span className="mono tabular" style={{ fontSize: 12 }}>{formatMAD(amt).split(",")[0]}</span>
+              <div key={name} className="card" style={{ padding: 16, background: "rgba(255,255,255,0.32)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "32px 1fr auto", gap: 12, alignItems: "center" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--accent-bg)", color: "var(--accent-ink)", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700 }}>
+                    {String(i + 1).padStart(2, "0")}
                   </div>
-                  <div style={{ height: 4, background: "var(--bg-inset)", borderRadius: 2 }}>
-                    <div style={{ height: "100%", width: `${(amt / (topFournisseurs[0]?.[1] || 1)) * 100}%`, background: `oklch(${0.55 + i * 0.05} 0.08 ${200 + i * 40})`, borderRadius: 2 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                      <Building2 size={12} />
+                      fournisseur actif
+                    </div>
                   </div>
+                  <div className="mono tabular" style={{ fontSize: 12, fontWeight: 600 }}>{formatMAD(amt).split(",")[0]}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="card" style={{ padding: 20 }}>
+        <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
-            <div className="card-title">Activité récente</div>
+            <div>
+              <div className="kpi-label">Actions recentes</div>
+              <div className="card-title">Activite du dossier</div>
+            </div>
           </div>
+
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {[
-              { icon: "sparkles", color: "accent", title: "Factures extraites automatiquement", sub: "98% conf. moyenne", time: "2min" },
-              { icon: "check", color: "pos", title: "Rapprochement BMCE validé", sub: "5 lignes sur 8 · rapproché", time: "1h" },
-              { icon: "alert", color: "warn", title: "Retard de paiement détecté", sub: "pénalité calculée au taux BAM 2,25%", time: "3h" },
-              { icon: "mail", color: "info", title: "Relance envoyée · niveau 2", sub: "Fournisseur · en retard", time: "hier" },
-              { icon: "upload", color: "", title: "Export SAGE 100 · journal", sub: "Écritures générées · prêt", time: "hier" },
-            ].map((a, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "26px 1fr auto", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: i < 4 ? "1px solid var(--line-1)" : "none" }}>
-                <div style={{ width: 26, height: 26, borderRadius: 6, background: a.color ? `var(--${a.color}-bg)` : "var(--bg-inset)", color: a.color ? `var(--${a.color}-ink)` : "var(--ink-2)", display: "grid", placeItems: "center" }}>
-                  {a.icon === "sparkles" ? <Sparkles size={13} /> : a.icon === "check" ? <Check size={13} /> : a.icon === "alert" ? <AlertTriangle size={13} /> : a.icon === "mail" ? <Mail size={13} /> : <Upload size={13} />}
+            {activity.map((a, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "34px 1fr auto", gap: 12, alignItems: "center", padding: "14px 0", borderBottom: i < activity.length - 1 ? "1px solid var(--line-1)" : "none" }}>
+                <div style={{ width: 34, height: 34, borderRadius: 12, background: a.color ? `var(--${a.color}-bg)` : "rgba(255,255,255,0.36)", color: a.color ? `var(--${a.color}-ink)` : "var(--ink-2)", display: "grid", placeItems: "center" }}>
+                  {a.icon === "sparkles" ? <Sparkles size={14} /> : a.icon === "check" ? <Check size={14} /> : a.icon === "alert" ? <AlertTriangle size={14} /> : a.icon === "mail" ? <Mail size={14} /> : <Upload size={14} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{a.title}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 2 }} className="truncate">{a.sub}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{a.title}</div>
+                  <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 3 }} className="truncate">{a.sub}</div>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>{a.time}</div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-function CashFlowChart() {
-  const months = ["Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc", "Jan", "Fév", "Mar", "Avr"];
-  const inc = [380, 420, 390, 460, 510, 490, 540, 620, 580, 610, 720, 780];
-  const out = [310, 355, 340, 380, 420, 445, 465, 540, 510, 528, 612, 680];
-  const max = Math.max(...inc, ...out) * 1.1;
-  const W = 600, H = 220, pad = 28;
-  const chartW = W - pad * 2, chartH = H - pad * 2;
-  const stepX = chartW / (months.length - 1);
-  const yAt = (v) => H - pad - (v / max) * chartH;
-  const toPath = (arr) => arr.map((v, i) => `${i === 0 ? "M" : "L"}${pad + i * stepX},${yAt(v)}`).join(" ");
+function MetricCard({ label, value, unit, hint, tone = "neutral" }) {
+  const toneStyle = tone === "warn"
+    ? { borderColor: "rgba(195,139,28,0.22)", background: "rgba(195,139,28,0.08)" }
+    : {};
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
-      {[0, 0.25, 0.5, 0.75, 1].map((f, i) => (
-        <line key={i} x1={pad} x2={W - pad} y1={pad + f * chartH} y2={pad + f * chartH} stroke="var(--line-1)" strokeDasharray={f === 1 ? "" : "2 3"} />
-      ))}
-      <path d={toPath(inc) + ` L${pad + (months.length - 1) * stepX},${H - pad} L${pad},${H - pad} Z`} fill="var(--pos-ink)" opacity="0.1" />
-      <path d={toPath(inc)} fill="none" stroke="var(--pos-ink)" strokeWidth="1.75" strokeLinejoin="round" />
-      <path d={toPath(out)} fill="none" stroke="var(--neg-ink)" strokeWidth="1.75" strokeLinejoin="round" strokeDasharray="3 2" />
-      {months.map((m, i) => (
-        <g key={m}>
-          <circle cx={pad + i * stepX} cy={yAt(inc[i])} r="2.5" fill="var(--pos-ink)" />
-          <text x={pad + i * stepX} y={H - 4} fontSize="9.5" fill="var(--ink-3)" textAnchor="middle">{m}</text>
-        </g>
-      ))}
-    </svg>
+    <div className="card" style={{ padding: 18, background: "rgba(255,255,255,0.34)", ...toneStyle }}>
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value">
+        <span className="tabular">{value}</span>
+        {unit && <span className="unit">{unit}</span>}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 10 }}>{hint}</div>
+    </div>
+  );
+}
+
+function DataPoint({ label, value, mono = false }) {
+  return (
+    <div className="card" style={{ padding: 14, background: "rgba(255,255,255,0.3)" }}>
+      <div className="kpi-label" style={{ marginBottom: 8 }}>{label}</div>
+      <div className={mono ? "mono tabular" : ""} style={{ fontSize: 13, fontWeight: 600 }}>
+        {value}
+      </div>
+    </div>
   );
 }
