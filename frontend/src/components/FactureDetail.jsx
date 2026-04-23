@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, Upload, Edit2, MoreHorizontal, ArrowRight } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
+import { useCorrection } from "../hooks/useCorrection";
 
-export default function FactureDetail({ facture, ecritures, onClose, onUpdate }) {
+export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
   const [editing, setEditing] = useState(null);
+  const correct = useCorrection(dossierId);
 
   useEffect(() => { setLocalF(facture); }, [facture?.id]);
 
   if (!facture) return null;
 
   const update = (key, value) => {
+    const original = localF[key];
     const next = { ...localF, [key]: value };
     if (key === "montant_ht" || key === "tva_taux") {
       next.tva = +(next.montant_ht * next.tva_taux / 100).toFixed(2);
@@ -19,6 +22,10 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate })
     }
     setLocalF(next);
     onUpdate?.(next);
+    // Apprentissage automatique sur les champs clés
+    if (["fournisseur", "compte_pcm", "code_tiers", "categorie"].includes(key)) {
+      correct({ facture: localF, champ: key, original: String(original ?? ""), corrige: String(value ?? "") });
+    }
   };
 
   const boxes = {
@@ -242,27 +249,43 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
 function Ledger({ rows }) {
   const debitSum = rows.reduce((s, r) => s + (r.debit || 0), 0);
   const creditSum = rows.reduce((s, r) => s + (r.credit || 0), 0);
-  return (
-    <div className="ledger">
-      <div className="ledger-row head">
-        <div>Compte</div><div>Journal</div><div>Libellé</div><div className="num">Débit</div><div className="num">Crédit</div>
+
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--ink-3)", background: "rgba(143,212,188,0.04)", border: "1px solid rgba(143,212,188,0.14)", borderRadius: 6 }}>
+        Aucune écriture générée.
       </div>
+    );
+  }
+
+  return (
+    <div style={{ border: "1px solid rgba(143,212,188,0.22)", borderRadius: 6, overflow: "hidden", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+      {/* Header */}
+      <div style={{ display: "grid", gridTemplateColumns: "90px 1fr 90px 90px", gap: 8, padding: "7px 12px", background: "rgba(143,212,188,0.12)", borderBottom: "1px solid rgba(143,212,188,0.18)", color: "var(--mint)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em" }}>
+        <div>Compte</div>
+        <div>Libellé</div>
+        <div style={{ textAlign: "right" }}>Débit</div>
+        <div style={{ textAlign: "right" }}>Crédit</div>
+      </div>
+      {/* Rows */}
       {rows.map((r, i) => (
-        <div key={i} className="ledger-row">
-          <div style={{ color: "var(--accent-ink)", fontWeight: 500 }}>{r.compte_pcm}</div>
-          <div style={{ color: "var(--ink-2)" }}>ACH</div>
-          <div style={{ fontFamily: "var(--font-sans)", fontSize: 12 }}>{r.libelle}</div>
-          <div className="num debit">{r.debit ? formatMAD(r.debit) : ""}</div>
-          <div className="num credit">{r.credit ? formatMAD(r.credit) : ""}</div>
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 90px 90px", gap: 8, padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid rgba(143,212,188,0.08)" : "none", background: i % 2 === 0 ? "rgba(0,45,36,0.5)" : "rgba(0,35,28,0.4)", alignItems: "center", color: "var(--ink-0)" }}>
+          <div style={{ color: "var(--accent-ink)", fontWeight: 600, fontSize: 11 }}>{r.compte_pcm}</div>
+          <div style={{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.libelle}</div>
+          <div style={{ textAlign: "right", color: r.debit ? "var(--ink-0)" : "var(--ink-3)", fontWeight: r.debit ? 600 : 400 }}>{r.debit ? formatMAD(r.debit).split(",")[0] : "—"}</div>
+          <div style={{ textAlign: "right", color: r.credit ? "var(--mint)" : "var(--ink-3)", fontWeight: r.credit ? 600 : 400 }}>{r.credit ? formatMAD(r.credit).split(",")[0] : "—"}</div>
         </div>
       ))}
-      <div className="ledger-total">
-        <span className="k">Totaux</span>
-        <span className="v">Débit {formatMAD(debitSum)}</span>
-        <span className="v">Crédit {formatMAD(creditSum)}</span>
-        {Math.abs(debitSum - creditSum) < 0.01 && (
-          <span style={{ color: "var(--pos-ink)", background: "var(--pos-bg)", padding: "1px 7px", borderRadius: 4, fontSize: 10.5, textTransform: "uppercase", fontWeight: 500 }}>équilibré</span>
-        )}
+      {/* Footer */}
+      <div style={{ display: "grid", gridTemplateColumns: "90px 1fr 90px 90px", gap: 8, padding: "8px 12px", background: "rgba(143,212,188,0.08)", borderTop: "1px solid rgba(143,212,188,0.18)", fontSize: 11, fontWeight: 700, color: "var(--ink-0)" }}>
+        <div style={{ color: "var(--ink-2)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", alignSelf: "center" }}>
+          {Math.abs(debitSum - creditSum) < 0.01
+            ? <span style={{ color: "var(--pos-ink)" }}>✓ Équilibré</span>
+            : <span style={{ color: "var(--neg-ink)" }}>⚠ Déséquilibré</span>}
+        </div>
+        <div />
+        <div style={{ textAlign: "right" }}>{formatMAD(debitSum).split(",")[0]}</div>
+        <div style={{ textAlign: "right", color: "var(--mint)" }}>{formatMAD(creditSum).split(",")[0]}</div>
       </div>
     </div>
   );

@@ -5,12 +5,20 @@ __pycache__/
 *.pyd
 .env
 *.db
+.venv/
+backend/.venv/
+backend/.tmp/
 
 # Node
 node_modules/
 dist/
 .vscode/
+*.log
+backend-node/*.log
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Local generated files
+backend/uploads/

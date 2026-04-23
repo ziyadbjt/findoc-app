@@ -6,7 +6,8 @@ import {
   getDossier, getFactures, getEcritures, exportJournal, MOCK_NOTIFICATIONS,
 } from "../api";
 import { enrichDossier, enrichFacture } from "../utils/format";
-import { Sidebar, Topbar, CmdK, NotificationsPanel, TweaksPanel } from "../components/Shell";
+import { Sidebar, Topbar, CmdK, NotificationsPanel } from "../components/Shell";
+import ChatBot from "../components/ChatBot";
 import OverviewPage from "./OverviewPage";
 import FacturesPage from "./FacturesPage";
 import DelaiPaiementPage from "./DelaiPaiementPage";
@@ -16,17 +17,21 @@ import TiersPage from "./TiersPage";
 import SettingsPage from "./SettingsPage";
 import TVAPage from "./TVAPage";
 import AuditPage from "./AuditPage";
+import AnomaliesPage from "./AnomaliesPage";
+import TresoPage from "./TresoPage";
 
 const CRUMBS = {
-  overview: ["Dossier", "Aperçu"],
+  overview: ["Dossier", "Apercu"],
   factures: ["Dossier", "Factures"],
-  delai_paiement: ["Dossier", "Délai de paiement"],
+  delai_paiement: ["Dossier", "Delai de paiement"],
   relances: ["Dossier", "Relances"],
   tiers: ["Dossier", "Tiers"],
-  journal: ["Dossier", "Journal SAGE"],
-  tva: ["Dossier", "Déclaration TVA"],
+  journal: ["Dossier", "Extraction"],
+  tva: ["Dossier", "Declaration TVA"],
   audit: ["Dossier", "Audit"],
-  parametres: ["Dossier", "Paramètres"],
+  anomalies: ["Dossier", "Anomalies"],
+  treso: ["Dossier", "Tresorerie"],
+  parametres: ["Dossier", "Parametres"],
 };
 
 export default function Dashboard() {
@@ -39,14 +44,13 @@ export default function Dashboard() {
   const [factures, setFactures] = useState([]);
   const [ecritures, setEcritures] = useState([]);
   const [route, setRoute] = useState("overview");
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
-  const [accent, setAccent] = useState(() => localStorage.getItem("accent") || "teal");
-  const [density, setDensity] = useState(() => localStorage.getItem("density") || "balanced");
-  const [layout, setLayout] = useState(() => localStorage.getItem("layout") || "table");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [accent] = useState(() => localStorage.getItem("accent") || "amber");
+  const [density] = useState(() => localStorage.getItem("density") || "balanced");
+  const [layout] = useState(() => localStorage.getItem("layout") || "table");
   const [showCmd, setShowCmd] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [showTweaks, setShowTweaks] = useState(false);
-  const [tiersType, setTiersType] = useState("fournisseurs");
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -62,10 +66,6 @@ export default function Dashboard() {
     document.documentElement.setAttribute("data-density", density);
     localStorage.setItem("density", density);
   }, [density]);
-
-  useEffect(() => {
-    localStorage.setItem("layout", layout);
-  }, [layout]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -90,7 +90,7 @@ export default function Dashboard() {
       setFactures(facRes.data.map(enrichFacture));
       setEcritures(ecrRes.data || []);
     } catch {
-      toast("Erreur lors du chargement des données", "neg");
+      toast("Erreur lors du chargement des donnees", "neg");
     }
   }, [token, id, toast]);
 
@@ -99,7 +99,7 @@ export default function Dashboard() {
   }, [loadData]);
 
   const counts = {
-    factures: factures.filter((f) => f.statut === "à_valider").length,
+    factures: factures.filter((f) => f.statut === "a_valider" || f.statut === "à_valider").length,
     recon: 0,
     relances: factures.filter((f) => f.paiement === "en_retard").length,
   };
@@ -119,7 +119,7 @@ export default function Dashboard() {
       a.href = url;
       a.download = `journal_${id}.xlsx`;
       a.click();
-      toast("Export SAGE 100 généré", "pos");
+      toast("Export SAGE 100 genere", "pos");
     } catch {
       toast("Erreur export", "neg");
     }
@@ -140,54 +140,35 @@ export default function Dashboard() {
   const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData };
 
   return (
-    <div className="app" data-density={density}>
-      <Sidebar
+    <div className="app-topnav" data-density={density}>
+      <Topbar
         route={route}
         setRoute={setRoute}
         dossier={dossier}
         onSwitchDossier={handleSwitchDossier}
         counts={counts}
         onLogout={handleLogout}
-        tiersType={tiersType}
-        setTiersType={setTiersType}
+        onOpenCmd={() => setShowCmd(true)}
+        onOpenNotifs={() => setShowNotifs(true)}
+        onOpenChat={() => setShowChat(true)}
+        onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
+        theme={theme}
+        hasNotifs={MOCK_NOTIFICATIONS.length > 0}
       />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-        <Topbar
-          crumbs={crumbs}
-          onOpenCmd={() => setShowCmd(true)}
-          onOpenNotifs={() => setShowNotifs(true)}
-          onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
-          theme={theme}
-          hasNotifs={MOCK_NOTIFICATIONS.length > 0}
-        />
-
-        <main style={{ flex: 1, overflowY: "auto", background: "var(--bg-0)" }}>
-          {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-          {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-          {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-          {route === "relances" && <RelancesPage {...pageProps} />}
-          {route === "tiers" && <TiersPage {...pageProps} tiersType={tiersType} />}
-          {route === "journal" && <JournalPage {...pageProps} />}
-          {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
-          {route === "audit" && <AuditPage dossier={dossier} user={user} />}
-          {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
-        </main>
-      </div>
-
-      {showTweaks && (
-        <TweaksPanel
-          onClose={() => setShowTweaks(false)}
-          accent={accent}
-          setAccent={setAccent}
-          density={density}
-          setDensity={setDensity}
-          theme={theme}
-          setTheme={setTheme}
-          layout={layout}
-          setLayout={setLayout}
-        />
-      )}
+      <main className="page" style={{ background: "transparent" }}>
+        {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
+        {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
+        {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
+        {route === "relances" && <RelancesPage {...pageProps} />}
+        {route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
+        {route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
+        {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
+        {route === "audit" && <AuditPage dossier={dossier} user={user} />}
+        {route === "anomalies" && <AnomaliesPage factures={factures} />}
+        {route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
+        {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+      </main>
 
       <CmdK
         open={showCmd}
@@ -201,6 +182,13 @@ export default function Dashboard() {
         open={showNotifs}
         onClose={() => setShowNotifs(false)}
         notifications={MOCK_NOTIFICATIONS}
+      />
+
+      <ChatBot
+        dossierId={id}
+        open={showChat}
+        onOpen={() => setShowChat(true)}
+        onClose={() => setShowChat(false)}
       />
     </div>
   );
