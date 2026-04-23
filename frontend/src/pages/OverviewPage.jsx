@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import {
-  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2,
+  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown,
 } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 
@@ -19,6 +19,83 @@ function MiniTrend({ data, color = "var(--accent)" }) {
       <path d={`${d} L${width},${height} L0,${height} Z`} fill={color} opacity="0.12" />
       <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function ComparaisonNvsN1({ factures }) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const lastYear = currentYear - 1;
+
+  const byYear = useMemo(() => {
+    const curr = { achats: 0, ventes: 0, tva: 0, nb: 0 };
+    const prev = { achats: 0, ventes: 0, tva: 0, nb: 0 };
+    (factures || []).forEach(f => {
+      const y = new Date(f.date_facture || "").getFullYear();
+      const target = y === currentYear ? curr : y === lastYear ? prev : null;
+      if (!target) return;
+      target.nb++;
+      target.tva += f.tva || 0;
+      if (f.type === "vente" || (f.code_tiers || "").startsWith("CL")) target.ventes += f.montant_ttc || 0;
+      else target.achats += f.montant_ttc || 0;
+    });
+    return { curr, prev };
+  }, [factures, currentYear, lastYear]);
+
+  const { curr, prev } = byYear;
+
+  const delta = (a, b) => {
+    if (!b) return null;
+    return Math.round(((a - b) / b) * 100);
+  };
+
+  const rows = [
+    { label: "Achats TTC",  curr: curr.achats,  prev: prev.achats  },
+    { label: "Ventes TTC",  curr: curr.ventes,  prev: prev.ventes  },
+    { label: "TVA",         curr: curr.tva,     prev: prev.tva     },
+    { label: "Factures",    curr: curr.nb,      prev: prev.nb, isCount: true },
+  ];
+
+  if (prev.nb === 0 && curr.nb === 0) return null;
+
+  return (
+    <section className="card" style={{ padding: 24, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div>
+          <div className="kpi-label">Exercice comparé</div>
+          <div className="card-title">N ({currentYear}) vs N-1 ({lastYear})</div>
+        </div>
+        {prev.nb === 0 && <span className="badge" style={{ marginLeft: "auto" }}>Données {lastYear} insuffisantes</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        {rows.map(r => {
+          const d = delta(r.curr, r.prev);
+          const up = d !== null && d >= 0;
+          return (
+            <div key={r.label} className="card" style={{ padding: 16, background: "var(--bg-inset)" }}>
+              <div style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{r.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--font-mono)", marginBottom: 6 }}>
+                {r.isCount ? curr[r.label === "Factures" ? "nb" : ""] : formatMAD(r.curr).split(",")[0]}
+                {!r.isCount && <span style={{ fontSize: 12, fontWeight: 400, color: "var(--ink-3)", marginLeft: 4 }}>MAD</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {d !== null ? (
+                  <>
+                    {up ? <TrendingUp size={12} style={{ color: "var(--pos-ink)" }} /> : <TrendingDown size={12} style={{ color: "var(--neg-ink)" }} />}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: up ? "var(--pos-ink)" : "var(--neg-ink)" }}>
+                      {up ? "+" : ""}{d}%
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--ink-3)" }}>vs {lastYear}</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Pas de données {lastYear}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -70,7 +147,6 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
         style={{
           padding: 28,
           marginBottom: 16,
-          background: "linear-gradient(135deg, rgba(255,255,255,0.56), rgba(255,255,255,0.26)), linear-gradient(120deg, rgba(164,104,60,0.08), rgba(81,108,138,0.08))",
         }}
       >
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.9fr)", gap: 20, alignItems: "stretch" }}>
@@ -119,7 +195,7 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
             </div>
           </div>
 
-          <div className="card" style={{ padding: 22, background: "rgba(255,255,255,0.46)" }}>
+          <div className="card" style={{ padding: 22, background: "var(--bg-inset)" }}>
             <div className="kpi-label">Lecture rapide</div>
             <div style={{ display: "grid", gap: 18 }}>
               <div>
@@ -167,7 +243,7 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px", gap: 18, alignItems: "center" }}>
-            <div className="card" style={{ padding: 18, background: "rgba(255,255,255,0.34)" }}>
+            <div className="card" style={{ padding: 18, background: "var(--bg-inset)" }}>
               <div className="kpi-value" style={{ marginBottom: 8 }}>
                 <span className="tabular">{formatMAD(totalAchats).split(",")[0]}</span>
                 <span className="unit">MAD</span>
@@ -213,6 +289,8 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
         </div>
       </section>
 
+      <ComparaisonNvsN1 factures={factures} />
+
       <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
         <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
@@ -232,7 +310,7 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
               </div>
             )}
             {topFournisseurs.map(([name, amt], i) => (
-              <div key={name} className="card" style={{ padding: 16, background: "rgba(255,255,255,0.32)" }}>
+              <div key={name} className="card" style={{ padding: 16, background: "var(--bg-inset)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "32px 1fr auto", gap: 12, alignItems: "center" }}>
                   <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--accent-bg)", color: "var(--accent-ink)", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700 }}>
                     {String(i + 1).padStart(2, "0")}
@@ -262,7 +340,7 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
           <div style={{ display: "flex", flexDirection: "column" }}>
             {activity.map((a, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "34px 1fr auto", gap: 12, alignItems: "center", padding: "14px 0", borderBottom: i < activity.length - 1 ? "1px solid var(--line-1)" : "none" }}>
-                <div style={{ width: 34, height: 34, borderRadius: 12, background: a.color ? `var(--${a.color}-bg)` : "rgba(255,255,255,0.36)", color: a.color ? `var(--${a.color}-ink)` : "var(--ink-2)", display: "grid", placeItems: "center" }}>
+                <div style={{ width: 34, height: 34, borderRadius: 12, background: a.color ? `var(--${a.color}-bg)` : "var(--bg-inset)", color: a.color ? `var(--${a.color}-ink)` : "var(--ink-2)", display: "grid", placeItems: "center" }}>
                   {a.icon === "sparkles" ? <Sparkles size={14} /> : a.icon === "check" ? <Check size={14} /> : a.icon === "alert" ? <AlertTriangle size={14} /> : a.icon === "mail" ? <Mail size={14} /> : <Upload size={14} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -281,11 +359,11 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
 
 function MetricCard({ label, value, unit, hint, tone = "neutral" }) {
   const toneStyle = tone === "warn"
-    ? { borderColor: "rgba(195,139,28,0.22)", background: "rgba(195,139,28,0.08)" }
+    ? { borderColor: "rgba(212,185,106,0.28)", background: "rgba(212,185,106,0.08)" }
     : {};
 
   return (
-    <div className="card" style={{ padding: 18, background: "rgba(255,255,255,0.34)", ...toneStyle }}>
+    <div className="card" style={{ padding: 18, background: "var(--bg-inset)", ...toneStyle }}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">
         <span className="tabular">{value}</span>
@@ -298,7 +376,7 @@ function MetricCard({ label, value, unit, hint, tone = "neutral" }) {
 
 function DataPoint({ label, value, mono = false }) {
   return (
-    <div className="card" style={{ padding: 14, background: "rgba(255,255,255,0.3)" }}>
+    <div className="card" style={{ padding: 14, background: "var(--bg-inset)" }}>
       <div className="kpi-label" style={{ marginBottom: 8 }}>{label}</div>
       <div className={mono ? "mono tabular" : ""} style={{ fontSize: 13, fontWeight: 600 }}>
         {value}

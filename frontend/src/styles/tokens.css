@@ -1,45 +1,67 @@
-/* Design tokens */
+/* Design tokens — Aethelgard dark-emerald theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif:wght@400;500;600&display=swap');
+
 :root {
-  --bg-0: #f4efe7;
-  --bg-1: rgba(255, 250, 244, 0.78);
-  --bg-2: rgba(255, 248, 239, 0.94);
-  --bg-3: #e6ddd1;
-  --bg-inset: rgba(88, 68, 47, 0.05);
-  --ink-0: #23180f;
-  --ink-1: #5c4632;
-  --ink-2: #8c735d;
-  --ink-3: #b19b87;
-  --line-0: rgba(87, 63, 42, 0.14);
-  --line-1: rgba(87, 63, 42, 0.08);
-  --line-strong: rgba(87, 63, 42, 0.24);
-  --accent: #a4683c;
-  --accent-ink: #61391d;
-  --accent-bg: rgba(164, 104, 60, 0.12);
-  --accent-line: rgba(164, 104, 60, 0.28);
-  --pos: #3f7a5c;
-  --pos-bg: rgba(63, 122, 92, 0.12);
-  --pos-ink: #25513b;
-  --warn: #c38b1c;
-  --warn-bg: rgba(195, 139, 28, 0.13);
-  --warn-ink: #7b5712;
-  --neg: #b5533b;
-  --neg-bg: rgba(181, 83, 59, 0.12);
-  --neg-ink: #6f2f21;
-  --info: #516c8a;
-  --info-bg: rgba(81, 108, 138, 0.12);
-  --info-ink: #32465d;
-  --shadow-xs: 0 1px 0 rgba(35, 24, 15, 0.04);
-  --shadow-sm: 0 10px 24px rgba(49, 31, 17, 0.06);
-  --shadow-md: 0 24px 60px rgba(49, 31, 17, 0.1);
-  --shadow-lg: 0 36px 90px rgba(37, 24, 14, 0.16);
-  --shadow-pop: 0 44px 120px rgba(37, 24, 14, 0.18);
-  --r-xs: 6px;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 28px;
-  --r-2xl: 36px;
+  /* Backgrounds */
+  --bg-0: #060b0a;
+  --bg-1: rgba(0, 38, 31, 0.82);
+  --bg-2: rgba(0, 47, 38, 0.94);
+  --bg-3: #0f1f1c;
+  --bg-inset: rgba(143, 212, 188, 0.04);
+
+  /* Text */
+  --ink-0: #f0f1ee;
+  --ink-1: #c8d4ce;
+  --ink-2: #8ea89f;
+  --ink-3: #5a6f68;
+
+  /* Borders */
+  --line-0: rgba(143, 212, 188, 0.16);
+  --line-1: rgba(143, 212, 188, 0.08);
+  --line-strong: rgba(143, 212, 188, 0.28);
+
+  /* Accent — gold */
+  --accent: #d4b96a;
+  --accent-ink: #ffe9a0;
+  --accent-bg: rgba(212, 185, 106, 0.13);
+  --accent-line: rgba(212, 185, 106, 0.32);
+
+  /* Mint (secondary accent) */
+  --mint: #8fd4bc;
+  --mint-bg: rgba(143, 212, 188, 0.12);
+  --mint-ink: #b4e8d6;
+
+  /* Status */
+  --pos: #6ab896;
+  --pos-bg: rgba(106, 184, 150, 0.14);
+  --pos-ink: #a8e8c8;
+  --warn: #d4b96a;
+  --warn-bg: rgba(212, 185, 106, 0.13);
+  --warn-ink: #ffe9a0;
+  --neg: #d27b6a;
+  --neg-bg: rgba(210, 123, 106, 0.14);
+  --neg-ink: #ffcfc8;
+  --info: #7b9db5;
+  --info-bg: rgba(123, 157, 181, 0.14);
+  --info-ink: #c0daee;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 20px 56px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 32px 80px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 44px 120px rgba(0, 0, 0, 0.72);
+
+  /* Radii */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
   --r-full: 9999px;
+
+  /* Spacing */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -50,6 +72,8 @@
   --sp-10: 40px;
   --sp-12: 48px;
   --sp-16: 64px;
+
+  /* Font sizes */
   --fs-10: 10px;
   --fs-11: 11px;
   --fs-12: 12px;
@@ -59,111 +83,114 @@
   --fs-16: 16px;
   --fs-18: 18px;
   --fs-22: 22px;
-  --fs-28: 32px;
-  --fs-36: 48px;
-  --font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-display: Georgia, "Times New Roman", serif;
+  --fs-28: 28px;
+  --fs-36: 36px;
+
+  /* Fonts */
+  --font-sans: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Noto Serif", Georgia, serif;
   --font-mono: "Consolas", "SFMono-Regular", Menlo, monospace;
-  --sidebar-w: 292px;
-  --topbar-h: 82px;
-  --row-h: 58px;
+
+  /* Layout */
+  --sidebar-w: 280px;
+  --topbar-h: 76px;
+  --row-h: 54px;
 }
 
 [data-density="compact"] { --row-h: 42px; }
 [data-density="balanced"] { --row-h: 50px; }
-[data-density="airy"] { --row-h: 58px; }
+[data-density="airy"] { --row-h: 60px; }
+
+/* Accent overrides — all map to gold/mint variants */
 [data-accent="teal"] {
-  --accent: #2f6f6a;
-  --accent-ink: #1a4a46;
-  --accent-bg: rgba(47, 111, 106, 0.12);
-  --accent-line: rgba(47, 111, 106, 0.28);
+  --accent: #8fd4bc;
+  --accent-ink: #b4e8d6;
+  --accent-bg: rgba(143, 212, 188, 0.13);
+  --accent-line: rgba(143, 212, 188, 0.30);
 }
 [data-accent="violet"] {
-  --accent: #755e9a;
-  --accent-ink: #4b3a69;
-  --accent-bg: rgba(117, 94, 154, 0.13);
-  --accent-line: rgba(117, 94, 154, 0.26);
+  --accent: #b09dce;
+  --accent-ink: #d8caee;
+  --accent-bg: rgba(176, 157, 206, 0.13);
+  --accent-line: rgba(176, 157, 206, 0.28);
 }
 [data-accent="amber"] {
-  --accent: #a4683c;
-  --accent-ink: #61391d;
-  --accent-bg: rgba(164, 104, 60, 0.12);
-  --accent-line: rgba(164, 104, 60, 0.28);
+  --accent: #d4b96a;
+  --accent-ink: #ffe9a0;
+  --accent-bg: rgba(212, 185, 106, 0.13);
+  --accent-line: rgba(212, 185, 106, 0.32);
 }
 [data-accent="ink"] {
-  --accent: #34261a;
-  --accent-ink: #34261a;
-  --accent-bg: rgba(52, 38, 26, 0.1);
-  --accent-line: rgba(52, 38, 26, 0.22);
+  --accent: #8fd4bc;
+  --accent-ink: #b4e8d6;
+  --accent-bg: rgba(143, 212, 188, 0.11);
+  --accent-line: rgba(143, 212, 188, 0.26);
 }
-[data-theme="dark"] {
-  --bg-0: #181310;
-  --bg-1: rgba(32, 25, 20, 0.84);
-  --bg-2: rgba(42, 33, 27, 0.95);
-  --bg-3: #3a2f28;
-  --bg-inset: rgba(255, 240, 221, 0.04);
-  --ink-0: #f4ede4;
-  --ink-1: #d7c6b3;
-  --ink-2: #a9937e;
-  --ink-3: #7c6858;
-  --line-0: rgba(255, 231, 206, 0.11);
-  --line-1: rgba(255, 231, 206, 0.06);
-  --line-strong: rgba(255, 231, 206, 0.2);
-  --accent: #d08d5b;
-  --accent-ink: #fff2e7;
-  --accent-bg: rgba(208, 141, 91, 0.18);
-  --accent-line: rgba(208, 141, 91, 0.34);
-  --pos: #6aa688;
-  --pos-bg: rgba(106, 166, 136, 0.18);
-  --pos-ink: #dbf5e7;
-  --warn: #d7a042;
-  --warn-bg: rgba(215, 160, 66, 0.18);
-  --warn-ink: #fff0d5;
-  --neg: #d27159;
-  --neg-bg: rgba(210, 113, 89, 0.18);
-  --neg-ink: #ffe4de;
-  --info: #7b93b5;
-  --info-bg: rgba(123, 147, 181, 0.18);
-  --info-ink: #e1edff;
-  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 14px 28px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 26px 70px rgba(0, 0, 0, 0.36);
-  --shadow-lg: 0 40px 110px rgba(0, 0, 0, 0.46);
-  --shadow-pop: 0 50px 130px rgba(0, 0, 0, 0.56);
+
+/* Dark theme is our default — light mode is a lighter emerald */
+[data-theme="light"] {
+  --bg-0: #f0f4f2;
+  --bg-1: rgba(240, 248, 244, 0.88);
+  --bg-2: rgba(230, 244, 238, 0.95);
+  --bg-3: #daeee6;
+  --bg-inset: rgba(0, 55, 42, 0.04);
+  --ink-0: #0d2420;
+  --ink-1: #2a4840;
+  --ink-2: #4d7268;
+  --ink-3: #7a9e96;
+  --line-0: rgba(0, 55, 42, 0.14);
+  --line-1: rgba(0, 55, 42, 0.08);
+  --line-strong: rgba(0, 55, 42, 0.24);
+  --accent: #a08030;
+  --accent-ink: #5a4400;
+  --accent-bg: rgba(160, 128, 48, 0.12);
+  --accent-line: rgba(160, 128, 48, 0.28);
+  --shadow-xs: 0 1px 0 rgba(0, 55, 42, 0.06);
+  --shadow-sm: 0 8px 24px rgba(0, 55, 42, 0.09);
+  --shadow-md: 0 20px 56px rgba(0, 55, 42, 0.13);
+  --shadow-lg: 0 32px 80px rgba(0, 55, 42, 0.18);
+  --shadow-pop: 0 44px 120px rgba(0, 55, 42, 0.22);
 }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+
 html {
-  background:
-    radial-gradient(circle at top left, rgba(164, 104, 60, 0.16), transparent 34%),
-    radial-gradient(circle at top right, rgba(73, 95, 121, 0.14), transparent 26%),
-    var(--bg-0);
+  background: var(--bg-0);
 }
+
+[data-theme="light"] html {
+  background: var(--bg-0);
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--fs-13);
   line-height: 1.5;
   color: var(--ink-0);
-  background: transparent;
+  background: var(--bg-0);
   -webkit-font-smoothing: antialiased;
 }
+
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: none; padding: 0; }
 a { color: inherit; text-decoration: none; }
 .mono { font-family: var(--font-mono); }
 .tabular { font-variant-numeric: tabular-nums; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--line-0); border-radius: var(--r-full); border: 2px solid transparent; }
 ::selection { background: var(--accent-bg); color: var(--accent-ink); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes fade-in { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
-@keyframes slide-up { from { opacity: 0; transform: translateY(18px);} to { opacity: 1; transform: none;} }
-@keyframes pop-in { 0% { transform: scale(.97); opacity: 0;} 100% { transform: none; opacity: 1;} }
-@keyframes bar-fill { from { transform: scaleX(0);} to { transform: scaleX(1);} }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes pop-in { 0% { transform: scale(.97) translate(-50%,-50%); opacity: 0; } 100% { transform: scale(1) translate(-50%,-50%); opacity: 1; } }
+@keyframes bar-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes glow-pulse { 0%, 100% { box-shadow: 0 0 8px rgba(143,212,188,0.25); } 50% { box-shadow: 0 0 18px rgba(143,212,188,0.45); } }

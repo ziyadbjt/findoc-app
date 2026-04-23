@@ -50,7 +50,7 @@ def _default_pcm(line_items: list[dict[str, Any]], fournisseur: str, code_tiers:
     return "6111000"
 
 
-def enrich_facture_metier(invoice_data: dict[str, Any]) -> dict[str, Any]:
+def enrich_facture_metier(invoice_data: dict[str, Any], dossier_id: int | None = None) -> dict[str, Any]:
     fournisseur = invoice_data.get("fournisseur") or "Fournisseur inconnu"
     line_items = invoice_data.get("line_items") or []
     texte_source = invoice_data.get("texte_source", "")
@@ -72,6 +72,15 @@ def enrich_facture_metier(invoice_data: dict[str, Any]) -> dict[str, Any]:
     if not os.getenv("ANTHROPIC_API_KEY"):
         return base_response
 
+    # RAG: inject similar past corrections into the prompt
+    rag_context = ""
+    try:
+        from services.rag import build_rag_context
+        description = " ".join(str(item.get("description", "")) for item in line_items[:5])
+        rag_context = build_rag_context(fournisseur, description, montant_ht, dossier_id)
+    except Exception:
+        pass
+
     prompt = f"""
 Tu es un assistant comptable marocain.
 Tu dois enrichir des donnees OCR de facture et retourner uniquement un JSON valide:
@@ -88,7 +97,7 @@ Regles:
 - CL = client
 - Si FE, appliquer RAS de 10% du montant HT
 - Choisir un compte PCM plausible
-
+{f"{chr(10)}{rag_context}" if rag_context else ""}
 Donnees OCR:
 {json.dumps({
     "fournisseur": fournisseur,

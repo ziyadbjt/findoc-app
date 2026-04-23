@@ -3,7 +3,7 @@ import {
   Home, FileText, GitMerge, Mail, Building2, Database, Settings,
   ChevronsUpDown, LogOut, ChevronRight, Search, Bell, Sun, Moon,
   Sparkles, AlertTriangle, Download, X, Plus, Send,
-  Receipt, ShieldCheck, MessageSquare,
+  Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
 
 export function DossierAvatar({ dossier, size = 28 }) {
@@ -39,126 +39,73 @@ export function DossierAvatar({ dossier, size = 28 }) {
   );
 }
 
-export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType }) {
+export function Sidebar() { return null; }
+
+export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs }) {
   const nav = [
-    { key: "overview", label: "Apercu", icon: <Home size={15} /> },
-    { key: "factures", label: "Factures", icon: <FileText size={15} />, badge: counts?.factures },
-    { key: "delai_paiement", label: "Delai de paiement", icon: <GitMerge size={15} />, badge: counts?.relances },
-    { key: "relances", label: "Relances", icon: <Mail size={15} /> },
-    { key: "tiers", label: "Tiers", icon: <Building2 size={15} /> },
-    { key: "journal", label: "Journal SAGE", icon: <Database size={15} /> },
-    { key: "tva", label: "Declaration TVA", icon: <Receipt size={15} /> },
-  ];
-  const sub = [
-    { key: "audit", label: "Audit", icon: <ShieldCheck size={15} /> },
-    { key: "parametres", label: "Parametres", icon: <Settings size={15} /> },
+    { key: "overview",       label: "Aperçu",          icon: <Home size={14} /> },
+    { key: "factures",       label: "Factures",         icon: <FileText size={14} />, badge: counts?.factures },
+    { key: "delai_paiement", label: "Délais",           icon: <GitMerge size={14} />, badge: counts?.relances },
+    { key: "relances",       label: "Relances",         icon: <Mail size={14} /> },
+    { key: "tiers",          label: "Tiers",            icon: <Building2 size={14} /> },
+    { key: "tva",            label: "TVA",              icon: <Receipt size={14} /> },
+    { key: "treso",          label: "Trésorerie",       icon: <TrendingUp size={14} /> },
+    { key: "anomalies",      label: "Anomalies",        icon: <AlertTriangle size={14} /> },
+    { key: "audit",          label: "Audit",            icon: <ShieldCheck size={14} /> },
+    { key: "journal",        label: "Extraction",       icon: <Database size={14} /> },
+    { key: "parametres",     label: "Paramètres",       icon: <Settings size={14} /> },
   ];
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-head">
-        <div className="sidebar-brand">
-          <div className="brand-mark">F</div>
-          <div className="brand-copy">
-            <div className="brand-kicker">Suite comptable</div>
-            <div className="brand-name">Findoc</div>
-          </div>
-          <span className="brand-version">v2.4</span>
-        </div>
+    <header className="topnav">
+      {/* Brand */}
+      <div className="topnav-brand">
+        <div className="brand-mark" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>F</div>
+        <span className="brand-name" style={{ fontSize: 15, letterSpacing: "0.12em" }}>Findoc</span>
       </div>
 
-      <button className="dossier-switcher" onClick={onSwitchDossier}>
-        <DossierAvatar dossier={dossier} size={48} />
-        <div className="dossier-info">
-          <div className="eyebrow">Dossier actif</div>
-          <div className="name truncate">{dossier?.raison_sociale || "Cabinet principal"}</div>
-          <div className="meta">{dossier?.forme_juridique || "Societe"} · {dossier?.ville || "Casablanca"}</div>
-        </div>
-        <ChevronsUpDown size={16} className="chev" />
+      {/* Dossier switcher */}
+      <button className="topnav-dossier" onClick={onSwitchDossier}>
+        <DossierAvatar dossier={dossier} size={24} />
+        <span className="truncate" style={{ maxWidth: 160, fontSize: 12, fontWeight: 500 }}>
+          {dossier?.raison_sociale || "Sélectionner un dossier"}
+        </span>
+        <ChevronsUpDown size={13} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
       </button>
 
-      <nav className="nav">
-        <div className="nav-section-title">Pilotage</div>
+      {/* Nav links */}
+      <nav className="topnav-links">
         {nav.map((n) => (
-          <div key={n.key}>
-            <button className={`nav-item${route === n.key ? " active" : ""}`} onClick={() => setRoute(n.key)}>
-              <span className="icon">{n.icon}</span>
-              <span>{n.label}</span>
-              {n.badge > 0 && <span className="badge-count">{n.badge}</span>}
-            </button>
-            {n.key === "tiers" && route === "tiers" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginLeft: 12, marginTop: 2 }}>
-                {["fournisseurs", "clients"].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTiersType(t)}
-                    className={`nav-item${tiersType === t ? " active" : ""}`}
-                    style={{ fontSize: 12, padding: "10px 12px" }}
-                  >
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: tiersType === t ? "var(--accent)" : "var(--line-strong)", flexShrink: 0 }} />
-                    <span style={{ textTransform: "capitalize" }}>{t}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-
-        <div className="nav-section-title" style={{ marginTop: 18 }}>Configuration</div>
-        {sub.map((n) => (
-          <button key={n.key} className={`nav-item${route === n.key ? " active" : ""}`} onClick={() => setRoute(n.key)}>
-            <span className="icon">{n.icon}</span>
+          <button
+            key={n.key}
+            className={`topnav-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
             <span>{n.label}</span>
+            {n.badge > 0 && <span className="topnav-badge">{n.badge}</span>}
           </button>
         ))}
       </nav>
 
-      <div className="sidebar-foot">
-        <div className="user-row" onClick={onLogout} title="Deconnexion">
-          <div className="avatar">ZB</div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-0)" }}>Ziyad B.</div>
-            <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Expert comptable senior</div>
-          </div>
-          <LogOut size={14} style={{ color: "var(--ink-3)" }} />
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-export function Topbar({ crumbs, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs }) {
-  const title = crumbs[crumbs.length - 1];
-
-  return (
-    <header className="topbar">
-      <div className="breadcrumbs">
-        <div className="breadcrumbs-trail">
-          {crumbs.slice(0, -1).map((c, i) => (
-            <span key={`${c}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {i > 0 && <span className="sep"><ChevronRight size={12} /></span>}
-              <span>{c}</span>
-            </span>
-          ))}
-        </div>
-        <span className="current">{title}</span>
-      </div>
-
-      <div className="topbar-meta">
-        <button className="topbar-search" onClick={onOpenCmd}>
-          <Search size={14} />
-          <span>Rechercher une facture, un tiers ou une ecriture</span>
+      {/* Right actions */}
+      <div className="topnav-actions">
+        <button className="topnav-search" onClick={onOpenCmd}>
+          <Search size={13} />
+          <span>Rechercher</span>
           <kbd>Ctrl K</kbd>
         </button>
-
-        <button className="icon-btn" onClick={onToggleTheme} title="Theme">
-          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        <button className="icon-btn" onClick={onToggleTheme} title="Thème">
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
         </button>
-        <button className="icon-btn" onClick={onOpenChat} title="Assistant FinDoc">
-          <MessageSquare size={15} />
+        <button className="icon-btn" onClick={onOpenChat} title="Assistant">
+          <MessageSquare size={14} />
         </button>
         <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
-          <Bell size={15} />
+          <Bell size={14} />
+        </button>
+        <button className="icon-btn" onClick={onLogout} title="Déconnexion">
+          <LogOut size={14} />
         </button>
       </div>
     </header>

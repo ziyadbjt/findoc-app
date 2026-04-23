@@ -107,6 +107,24 @@ export async function sendChatMessage(token, payload, handlers = {}) {
   if (buffer.trim()) emitEvent(buffer);
 }
 
+export const recordCorrection = (token, payload) =>
+  axios.post(`${BASE}/learning/correction`, payload, auth(token));
+
+export const getCorrections = (token, dossierId) =>
+  axios.get(`${BASE}/learning/corrections/${dossierId}`, auth(token));
+
+export const getRagStatus = (token) =>
+  axios.get(`${BASE}/learning/status`, auth(token));
+
+export const MOCK_BANK_LINES = [
+  { id: "b1", date: "2026-03-15", libelle: "VIR FOURNISSEUR ATECH DIGITAL",    montant: -5760.00, ref: "VIR-26031501" },
+  { id: "b2", date: "2026-03-18", libelle: "VIR FOURNISSEUR MAROC PRINT",       montant: -2880.00, ref: "VIR-26031802" },
+  { id: "b3", date: "2026-03-22", libelle: "PRLV SAFRAN MAROC",                 montant: -18600.00, ref: "PRV-26032201" },
+  { id: "b4", date: "2026-03-28", libelle: "VIR SONATRACH",                     montant: -34200.00, ref: "VIR-26032803" },
+  { id: "b5", date: "2026-04-02", libelle: "ENCAISSEMENT OCP",                  montant: 48000.00,  ref: "ENC-26040201" },
+  { id: "b6", date: "2026-04-05", libelle: "VIR FOURNISSEUR CIMENTS DU MAROC",  montant: -9120.00,  ref: "VIR-26040502" },
+];
+
 export const MOCK_NOTIFICATIONS = [
   { id: 1, kind: "ai", ts: "il y a 2min", title: "Factures extraites automatiquement", body: "98% de confiance moyenne" },
   { id: 2, kind: "warn", ts: "il y a 14min", title: "Retard detecte", body: "Retard detecte · penalite calculee" },

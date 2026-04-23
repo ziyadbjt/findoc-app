@@ -3,12 +3,10 @@ import axios from "axios"
 
 const AuthContext = createContext()
 const API_BASE = "http://localhost:8000"
-const DEV_DEMO_EMAIL = "ziyad@cabinetchami.ma"
-const DEV_DEMO_PASSWORD = "password123"
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(localStorage.getItem("token"))
+  const [token, setToken] = useState(null)
   const [authReady, setAuthReady] = useState(false)
 
   const hydrateSession = async (sessionToken) => {
@@ -36,12 +34,16 @@ export function AuthProvider({ children }) {
         if (storedToken) {
           await hydrateSession(storedToken)
         } else {
-          await loginWithCredentials(DEV_DEMO_EMAIL, DEV_DEMO_PASSWORD)
+          await loginWithCredentials("ziyad@cabinetchami.ma", "password123")
         }
       } catch {
-        localStorage.removeItem("token")
-        setToken(null)
-        setUser(null)
+        try {
+          await loginWithCredentials("ziyad@cabinetchami.ma", "password123")
+        } catch {
+          localStorage.removeItem("token")
+          setToken(null)
+          setUser(null)
+        }
       } finally {
         setAuthReady(true)
       }
@@ -54,7 +56,9 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
-    loginWithCredentials(DEV_DEMO_EMAIL, DEV_DEMO_PASSWORD)
+    localStorage.removeItem("token")
+    setToken(null)
+    setUser(null)
   }
 
   return (

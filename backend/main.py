@@ -6,12 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models import schemas
 from models.database import engine
-from routers import admin, auth, chat, dossiers, factures, reconciliation
+from routers import admin, auth, chat, dossiers, factures, learning, reconciliation
 
 
 schemas.Base.metadata.create_all(bind=engine)
 
-_DB_PATH = os.path.join(os.path.dirname(__file__), "findoc.db")
+_DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "findoc.db"))
 _NEW_COLS = [
     ("if_number", "TEXT"),
     ("rc_number", "TEXT"),
@@ -63,6 +63,7 @@ app.include_router(dossiers.router)
 app.include_router(factures.router)
 app.include_router(reconciliation.router)
 app.include_router(chat.router)
+app.include_router(learning.router)
 app.include_router(admin.router)
 
 

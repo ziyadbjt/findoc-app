@@ -89,7 +89,11 @@ function RetardsTab({ factures }) {
                     {penalty > 0.5 ? formatMAD(penalty).split(",")[0] : "—"}
                   </td>
                   <td className="td">
-                    <span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:99, background:`${levelColor}18`, color:levelColor }}>
+                    <span style={{
+                      fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:99,
+                      background: f.overdueDays > 90 ? "var(--neg-bg)" : f.overdueDays > 30 ? "var(--warn-bg)" : "var(--accent-bg)",
+                      color: levelColor,
+                    }}>
                       {f.overdueDays > 90 ? "Critique" : f.overdueDays > 30 ? "Retard" : "Récent"}
                     </span>
                   </td>

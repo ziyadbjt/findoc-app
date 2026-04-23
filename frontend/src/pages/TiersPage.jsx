@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import { Building2, Download, Search, Upload, User } from "lucide-react";
+import { Building2, Download, Search, Upload, User, Pencil, Check, X } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { formatDate, formatMAD } from "../utils/format";
+import { useCorrection } from "../hooks/useCorrection";
 
 const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
@@ -56,7 +57,44 @@ const parseCsv = (content) => {
   return rows;
 };
 
-export default function TiersPage({ factures, tiersType = "fournisseurs", dossierId }) {
+function EditableCodeTiers({ tier, dossierId }) {
+  const correct = useCorrection(dossierId);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(tier.code_tiers || "");
+
+  const submit = async () => {
+    if (!val.trim() || val === tier.code_tiers) { setEditing(false); return; }
+    await correct({
+      facture: { fournisseur: tier.nom, montant_ht: tier.total_ttc },
+      champ: "code_tiers",
+      original: tier.code_tiers || "",
+      corrige: val.trim(),
+    });
+    setEditing(false);
+  };
+
+  if (editing) return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <input autoFocus
+        style={{ width: 120, fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--accent)", background: "var(--bg-0)", color: "var(--ink-0)", fontFamily: "var(--font-mono)" }}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") submit(); if (e.key === "Escape") setEditing(false); }}
+      />
+      <button className="icon-btn" onClick={submit}><Check size={12} /></button>
+      <button className="icon-btn" onClick={() => setEditing(false)}><X size={12} /></button>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{val || "Non renseigné"}</span>
+      <button className="icon-btn" onClick={() => setEditing(true)} title="Corriger — FinAI apprend" style={{ opacity: 0.5 }}><Pencil size={11} /></button>
+    </div>
+  );
+}
+
+function TiersSection({ factures, tiersType, dossierId }) {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null);
   const fileInputRef = useRef(null);
@@ -249,27 +287,14 @@ export default function TiersPage({ factures, tiersType = "fournisseurs", dossie
   const totalTTC = tiers.reduce((sum, tier) => sum + tier.total_ttc, 0);
 
   return (
-    <div className="page-inner">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Tiers · {tiersType === "fournisseurs" ? "Fournisseurs" : "Clients"}</h1>
-          <p className="page-subtitle">{tiers.length} tiers · {formatMAD(totalTTC).split(",")[0]} MAD TTC cumulé</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, fontSize: 12, color: "var(--ink-2)" }}>
+          {tiers.length} tiers · {formatMAD(totalTTC).split(",")[0]} MAD TTC cumulé
         </div>
-        <div className="page-actions">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.json,.xls,.xlsx"
-            style={{ display: "none" }}
-            onChange={handleImport}
-          />
-          <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={14} /> Importer les tiers
-          </button>
-          <button className="btn btn-primary" onClick={handleExport}>
-            <Download size={14} /> Exporter les tiers
-          </button>
-        </div>
+        <input ref={fileInputRef} type="file" accept=".csv,.json,.xls,.xlsx" style={{ display: "none" }} onChange={handleImport} />
+        <button className="btn" onClick={() => fileInputRef.current?.click()}><Upload size={13} /> Importer</button>
+        <button className="btn btn-primary" onClick={handleExport}><Download size={13} /> Exporter</button>
       </div>
 
       <div className="filter-bar">
@@ -341,7 +366,7 @@ export default function TiersPage({ factures, tiersType = "fournisseurs", dossie
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ padding: "15px 18px", borderBottom: "1px solid var(--line-1)" }}>
               <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{selected.nom}</div>
-              <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{selected.code_tiers || "Code non renseigné"}</div>
+              <EditableCodeTiers tier={selected} dossierId={dossierId} />
             </div>
             <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--line-1)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {[
@@ -381,6 +406,38 @@ export default function TiersPage({ factures, tiersType = "fournisseurs", dossie
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+export default function TiersPage({ factures, dossierId }) {
+  const [tab, setTab] = useState("fournisseurs");
+  const totalFourn = factures.filter(f => (f.type || "achat") === "achat").length;
+  const totalClients = factures.filter(f => f.type === "vente").length;
+
+  return (
+    <div className="page-inner">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Tiers</h1>
+          <p className="page-subtitle">Fournisseurs et clients du dossier</p>
+        </div>
+      </div>
+
+      <div className="filter-chips" style={{ marginBottom: 8 }}>
+        <button className={`chip${tab === "fournisseurs" ? " active" : ""}`} onClick={() => setTab("fournisseurs")}>
+          <Building2 size={12} style={{ marginRight: 4 }} />
+          Fournisseurs
+          {totalFourn > 0 && <span style={{ marginLeft: 6, background: "var(--bg-2)", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>{totalFourn}</span>}
+        </button>
+        <button className={`chip${tab === "clients" ? " active" : ""}`} onClick={() => setTab("clients")}>
+          <User size={12} style={{ marginRight: 4 }} />
+          Clients
+          {totalClients > 0 && <span style={{ marginLeft: 6, background: "var(--bg-2)", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>{totalClients}</span>}
+        </button>
+      </div>
+
+      <TiersSection factures={factures} tiersType={tab} dossierId={dossierId} />
     </div>
   );
 }

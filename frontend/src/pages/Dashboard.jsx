@@ -17,6 +17,8 @@ import TiersPage from "./TiersPage";
 import SettingsPage from "./SettingsPage";
 import TVAPage from "./TVAPage";
 import AuditPage from "./AuditPage";
+import AnomaliesPage from "./AnomaliesPage";
+import TresoPage from "./TresoPage";
 
 const CRUMBS = {
   overview: ["Dossier", "Apercu"],
@@ -24,9 +26,11 @@ const CRUMBS = {
   delai_paiement: ["Dossier", "Delai de paiement"],
   relances: ["Dossier", "Relances"],
   tiers: ["Dossier", "Tiers"],
-  journal: ["Dossier", "Journal SAGE"],
+  journal: ["Dossier", "Extraction"],
   tva: ["Dossier", "Declaration TVA"],
   audit: ["Dossier", "Audit"],
+  anomalies: ["Dossier", "Anomalies"],
+  treso: ["Dossier", "Tresorerie"],
   parametres: ["Dossier", "Parametres"],
 };
 
@@ -40,14 +44,13 @@ export default function Dashboard() {
   const [factures, setFactures] = useState([]);
   const [ecritures, setEcritures] = useState([]);
   const [route, setRoute] = useState("overview");
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [accent] = useState(() => localStorage.getItem("accent") || "amber");
   const [density] = useState(() => localStorage.getItem("density") || "balanced");
   const [layout] = useState(() => localStorage.getItem("layout") || "table");
   const [showCmd, setShowCmd] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [tiersType, setTiersType] = useState("fournisseurs");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -137,41 +140,35 @@ export default function Dashboard() {
   const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData };
 
   return (
-    <div className="app" data-density={density}>
-      <Sidebar
+    <div className="app-topnav" data-density={density}>
+      <Topbar
         route={route}
         setRoute={setRoute}
         dossier={dossier}
         onSwitchDossier={handleSwitchDossier}
         counts={counts}
         onLogout={handleLogout}
-        tiersType={tiersType}
-        setTiersType={setTiersType}
+        onOpenCmd={() => setShowCmd(true)}
+        onOpenNotifs={() => setShowNotifs(true)}
+        onOpenChat={() => setShowChat(true)}
+        onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
+        theme={theme}
+        hasNotifs={MOCK_NOTIFICATIONS.length > 0}
       />
 
-      <div className="main" style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-        <Topbar
-          crumbs={crumbs}
-          onOpenCmd={() => setShowCmd(true)}
-          onOpenNotifs={() => setShowNotifs(true)}
-          onOpenChat={() => setShowChat(true)}
-          onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
-          theme={theme}
-          hasNotifs={MOCK_NOTIFICATIONS.length > 0}
-        />
-
-        <main className="page" style={{ background: "transparent" }}>
-          {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-          {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-          {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-          {route === "relances" && <RelancesPage {...pageProps} />}
-          {route === "tiers" && <TiersPage {...pageProps} tiersType={tiersType} />}
-          {route === "journal" && <JournalPage {...pageProps} />}
-          {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
-          {route === "audit" && <AuditPage dossier={dossier} user={user} />}
-          {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
-        </main>
-      </div>
+      <main className="page" style={{ background: "transparent" }}>
+        {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
+        {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
+        {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
+        {route === "relances" && <RelancesPage {...pageProps} />}
+        {route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
+        {route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
+        {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
+        {route === "audit" && <AuditPage dossier={dossier} user={user} />}
+        {route === "anomalies" && <AnomaliesPage factures={factures} />}
+        {route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
+        {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+      </main>
 
       <CmdK
         open={showCmd}

@@ -509,7 +509,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       )}
 
       {selected && (
-        <FactureDetail facture={selected} ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)} onClose={() => setSelected(null)} onUpdate={() => { setSelected(null); onRefresh(); }} />
+        <FactureDetail facture={selected} ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)} onClose={() => setSelected(null)} onUpdate={() => { setSelected(null); onRefresh(); }} dossierId={dossierId} />
       )}
     </div>
   );

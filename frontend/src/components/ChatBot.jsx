@@ -11,7 +11,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Je peux repondre sur les retards, la TVA, les ecritures PCM et le resume du dossier.",
+      content: "Bonjour, je suis FinAI. Comment puis-je vous aider ?",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -37,9 +37,10 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
           padding: "14px 18px",
           borderRadius: 999,
           border: "1px solid var(--accent-line)",
-          background: "linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 64%, #f0d4bc))",
-          color: "#fff9f1",
-          boxShadow: "0 18px 44px rgba(35, 24, 15, 0.24)",
+          background: "linear-gradient(135deg, rgba(0,50,40,0.95), rgba(0,70,55,0.9))",
+          color: "var(--mint)",
+          border: "1px solid rgba(143,212,188,0.28)",
+          boxShadow: "0 18px 44px rgba(0,0,0,0.5), 0 0 0 1px rgba(143,212,188,0.14)",
           fontSize: 13,
           fontWeight: 700,
         }}
@@ -51,15 +52,15 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
             borderRadius: 999,
             display: "grid",
             placeItems: "center",
-            background: "rgba(255, 249, 241, 0.16)",
-            border: "1px solid rgba(255, 249, 241, 0.22)",
+            background: "rgba(143, 212, 188, 0.12)",
+            border: "1px solid rgba(143, 212, 188, 0.24)",
           }}
         >
           <MessageSquare size={16} />
         </span>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.15 }}>
-          <span>Activer le chat</span>
-          <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.9 }}>PCM, TVA, retards, ecritures</span>
+          <span>FinAI — Assistant FinDoc</span>
+          <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.9 }}>Posez vos questions comptables</span>
         </span>
       </button>
     );
@@ -103,18 +104,18 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
   return (
     <div style={{ position: "fixed", right: 24, bottom: 24, width: 380, maxWidth: "calc(100vw - 24px)", zIndex: 80 }}>
       <div className="card" style={{ padding: 0, overflow: "hidden", boxShadow: "0 24px 80px rgba(20, 20, 20, 0.18)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-1)", background: "linear-gradient(135deg, rgba(164,104,60,0.14), rgba(47,111,106,0.10))" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-1)", background: "linear-gradient(135deg, rgba(0,50,40,0.9), rgba(0,70,55,0.7))" }}>
           <div style={{ width: 34, height: 34, borderRadius: 12, display: "grid", placeItems: "center", background: "var(--accent-bg)", color: "var(--accent-ink)" }}>
             <MessageSquare size={16} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Chatbot FinDoc</div>
-            <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>PCM, TVA, Loi 69-21, resume dossier</div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>FinAI — Assistant FinDoc</div>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>Factures, TVA, ecritures, dossier</div>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={14} /></button>
         </div>
 
-        <div ref={bodyRef} style={{ maxHeight: 420, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10, background: "rgba(255,255,255,0.45)" }}>
+        <div ref={bodyRef} style={{ maxHeight: 420, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10, background: "var(--bg-inset)" }}>
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
