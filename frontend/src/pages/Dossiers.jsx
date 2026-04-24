@@ -457,6 +457,11 @@ export default function Dossiers() {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{user?.nom || "Ziyad B."}</div>
+          {user?.role === "admin" && (
+            <button className="btn btn-secondary" onClick={() => navigate("/admin")}>
+              Admin
+            </button>
+          )}
           <button className="icon-btn" onClick={() => { logout(); navigate("/login"); }} title="Déconnexion">
             <LogOut size={15} />
           </button>

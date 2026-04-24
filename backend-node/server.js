@@ -77,6 +77,22 @@ function ensureSchema() {
 import sqlite3
 conn = sqlite3.connect(${JSON.stringify(DB_PATH)})
 conn.execute("""
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  hashed_password TEXT,
+  nom TEXT,
+  role TEXT DEFAULT 'collab',
+  status TEXT DEFAULT 'active',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+if "status" not in columns:
+    conn.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+if "created_at" not in columns:
+    conn.execute("ALTER TABLE users ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+conn.execute("""
 CREATE TABLE IF NOT EXISTS team_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   dossier_id INTEGER NOT NULL,
@@ -296,30 +312,63 @@ const tokens = {};
 let nextId = 100;
 const memDossiers = [];
 
+const ROLES = ["admin", "collab", "invite"];
 const USERS = {
-  "ziyad@cabinetchami.ma": { id: 1, email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin" },
-  "sarah@cabinetchami.ma": { id: 2, email: "sarah@cabinetchami.ma", nom: "Sarah", role: "manager" },
-  "youssef@cabinetchami.ma": { id: 3, email: "youssef@cabinetchami.ma", nom: "Youssef", role: "collaborateur" },
+  "ziyad@cabinetchami.ma": { id: 1, email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin", status: "active" },
+  "sarah@cabinetchami.ma": { id: 2, email: "sarah@cabinetchami.ma", nom: "Sarah", role: "collab", status: "active" },
+  "youssef@cabinetchami.ma": { id: 3, email: "youssef@cabinetchami.ma", nom: "Youssef", role: "invite", status: "active" },
 };
 
 ensureSchema();
 
+function normalizeRole(role) {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "collaborateur" || value === "collab") return "collab";
+  if (value === "invité" || value === "invite") return "invite";
+  return ROLES.includes(value) ? value : "collab";
+}
+
+function seedDefaultUsers() {
+  if (!PYTHON || !fs.existsSync(DB_PATH)) return;
+  const existing = sqlQuery("SELECT COUNT(*) AS count FROM users");
+  if ((existing?.[0]?.count || 0) > 0) return;
+  Object.values(USERS).forEach((user) => {
+    sqlRun(
+      "INSERT INTO users (email, hashed_password, nom, role, status, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+      [user.email, bcrypt.hashSync("password123", 10), user.nom, normalizeRole(user.role), user.status || "active"]
+    );
+  });
+}
+
+seedDefaultUsers();
+
 function getUserByEmail(email) {
-  const rows = sqlQuery("SELECT id, email, nom, role FROM users WHERE email = ?", [email]);
-  if (rows && rows.length > 0) return rows[0];
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users WHERE email = ?", [email]);
+  if (rows && rows.length > 0) return { ...rows[0], role: normalizeRole(rows[0].role) };
   return USERS[email] || null;
 }
 
 function getUserById(id) {
-  const rows = sqlQuery("SELECT id, email, nom, role FROM users WHERE id = ?", [id]);
-  if (rows && rows.length > 0) return rows[0];
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users WHERE id = ?", [id]);
+  if (rows && rows.length > 0) return { ...rows[0], role: normalizeRole(rows[0].role) };
   return Object.values(USERS).find((user) => Number(user.id) === Number(id)) || null;
 }
 
 function listKnownUsers() {
-  const rows = sqlQuery("SELECT id, email, nom, role FROM users ORDER BY nom ASC, email ASC");
-  if (rows && rows.length > 0) return rows;
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users ORDER BY nom ASC, email ASC");
+  if (rows && rows.length > 0) return rows.map((row) => ({ ...row, role: normalizeRole(row.role) }));
   return Object.values(USERS);
+}
+
+function requireAdmin(req, res) {
+  const email = requireAuth(req, res);
+  if (!email) return null;
+  const user = getUserByEmail(email);
+  if (!user || normalizeRole(user.role) !== "admin") {
+    res.status(403).json({ detail: "Acces reserve a l'admin" });
+    return null;
+  }
+  return user;
 }
 
 function requireAuth(req, res) {
@@ -340,9 +389,12 @@ app.post("/auth/login", express.urlencoded({ extended: true }), (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(401).json({ detail: "Email ou mot de passe incorrect" });
 
-  const rows = sqlQuery("SELECT email, nom, role, hashed_password FROM users WHERE email = ?", [username]);
+  const rows = sqlQuery("SELECT email, nom, role, status, hashed_password FROM users WHERE email = ?", [username]);
   if (rows && rows.length > 0) {
     const user = rows[0];
+    if (user.status === "disabled") {
+      return res.status(403).json({ detail: "Compte desactive" });
+    }
     const hash = user.hashed_password || "";
     const isBcryptHash = typeof hash === "string" && hash.startsWith("$2");
     const passwordOk = isBcryptHash ? bcrypt.compareSync(password, hash) : hash === password;
@@ -363,7 +415,57 @@ app.post("/auth/login", express.urlencoded({ extended: true }), (req, res) => {
 app.get("/auth/me", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
-  return res.json(getUserByEmail(email) || { email, nom: email, role: "user" });
+  return res.json(getUserByEmail(email) || { email, nom: email, role: "collab", status: "active" });
+});
+
+app.get("/admin/users", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  res.json(listKnownUsers());
+});
+
+app.post("/admin/users", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const nom = String(req.body?.nom || "").trim();
+  const role = normalizeRole(req.body?.role);
+  const password = String(req.body?.password || "").trim() || "password123";
+
+  if (!email || !nom) return res.status(400).json({ detail: "Nom et email requis" });
+  if (getUserByEmail(email)) return res.status(409).json({ detail: "Utilisateur deja existant" });
+
+  const insert = sqlRun(
+    "INSERT INTO users (email, hashed_password, nom, role, status, created_at) VALUES (?, ?, ?, ?, 'active', datetime('now'))",
+    [email, bcrypt.hashSync(password, 10), nom, role]
+  );
+
+  if (!insert?.lastrowid) return res.status(500).json({ detail: "Creation impossible" });
+  res.status(201).json(getUserById(insert.lastrowid));
+});
+
+app.patch("/admin/users/:id", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const user = getUserById(req.params.id);
+  if (!user) return res.status(404).json({ detail: "Utilisateur introuvable" });
+
+  const nextNom = req.body?.nom != null ? String(req.body.nom).trim() : user.nom;
+  const nextRole = req.body?.role != null ? normalizeRole(req.body.role) : normalizeRole(user.role);
+  const nextStatus = req.body?.status === "disabled" ? "disabled" : "active";
+
+  sqlRun(
+    "UPDATE users SET nom = ?, role = ?, status = ? WHERE id = ?",
+    [nextNom, nextRole, nextStatus, req.params.id]
+  );
+
+  if (req.body?.password) {
+    sqlRun("UPDATE users SET hashed_password = ? WHERE id = ?", [bcrypt.hashSync(String(req.body.password), 10), req.params.id]);
+  }
+
+  res.json(getUserById(req.params.id));
 });
 
 app.get("/dossiers/", (req, res) => {
