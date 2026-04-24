@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Send, Mail, AlertTriangle, Clock, Check } from "lucide-react";
+import { Send, Mail, AlertTriangle, Clock, Check, Download, Copy } from "lucide-react";
 import { formatMAD, formatDate, daysBetween } from "../utils/format";
 
 const BAM_RATE = 0.0225;
@@ -38,13 +38,17 @@ function RelanceRow({ f, overdueDays, penalty, selected, onSelect }) {
         </div>
         {penalty > 0 && (
           <div style={{ fontSize: 11, color: "var(--neg-ink)", marginTop: 3 }}>
-            Pénalité Loi 69-21 · {formatMAD(penalty).split(",")[0]} MAD
+            Pénalité de retard · {formatMAD(penalty).split(",")[0]} MAD
           </div>
         )}
       </div>
       <div style={{ textAlign: "right" }}>
         <div className="mono tabular" style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{formatMAD(f.montant_ttc).split(",")[0]}</div>
-        <span style={{ fontSize: 11, fontWeight: 500, color: levelColor, background: `${levelColor}18`, padding: "1px 7px", borderRadius: 99 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 500, padding: "1px 7px", borderRadius: 99,
+          color: overdueDays > 90 ? "var(--neg-ink)" : overdueDays > 30 ? "var(--warn-ink)" : "var(--accent-ink)",
+          background: overdueDays > 90 ? "var(--neg-bg)" : overdueDays > 30 ? "var(--warn-bg)" : "var(--accent-bg)",
+        }}>
           +{overdueDays}j
         </span>
       </div>
@@ -80,7 +84,7 @@ ${openings[tone]} le(s) facture(s) suivante(s) demeurant impayée(s) :
 
 ${refs}
 
-Montant total dû : ${formatMAD(total).split(",")[0]} MAD TTC${penalties > 0.5 ? `\nPénalités Loi 69-21 (taux BAM ${(BAM_RATE * 100).toFixed(2)}% + 3%) : ${formatMAD(penalties).split(",")[0]} MAD` : ""}
+Montant total dû : ${formatMAD(total).split(",")[0]} MAD TTC${penalties > 0.5 ? `\nPénalités de retard (taux BAM ${(BAM_RATE * 100).toFixed(2)}% + 3%) : ${formatMAD(penalties).split(",")[0]} MAD` : ""}
 
 ${closings[tone]}
 
@@ -133,6 +137,37 @@ export default function RelancesPage({ factures }) {
     setSelected(new Set());
   };
 
+  const handleCopy = () => {
+    if (!emailBody) return;
+    navigator.clipboard.writeText(emailBody);
+  };
+
+  const handleExportPDF = () => {
+    if (!emailBody) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body { font-family: Georgia, serif; max-width: 700px; margin: 60px auto; color: #111; line-height: 1.7; }
+      pre { font-family: inherit; white-space: pre-wrap; font-size: 14px; }
+      .header { border-bottom: 2px solid #00342c; padding-bottom: 16px; margin-bottom: 32px; display: flex; justify-content: space-between; }
+      .logo { font-size: 22px; font-weight: 700; color: #00342c; letter-spacing: 0.1em; }
+      .meta { font-size: 12px; color: #666; text-align: right; }
+      .footer { margin-top: 60px; border-top: 1px solid #ddd; padding-top: 12px; font-size: 11px; color: #999; }
+    </style></head><body>
+      <div class="header">
+        <div class="logo">FINDOC</div>
+        <div class="meta">Cabinet Chami & Associés<br>${new Date().toLocaleDateString("fr-FR")}</div>
+      </div>
+      <pre>${emailBody.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+      <div class="footer">Document généré par FinDoc · ${new Date().toLocaleString("fr-FR")}</div>
+    </body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `relance_niveau${level}_${new Date().toISOString().slice(0, 10)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="page-inner">
       <div className="page-header">
@@ -149,7 +184,7 @@ export default function RelancesPage({ factures }) {
         <div className="card" style={{ padding: 40, textAlign: "center" }}>
           <Check size={28} style={{ color: "var(--pos-ink)", margin: "0 auto 12px" }} />
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Aucun retard détecté</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Toutes les factures sont dans les délais Loi 69-21.</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Toutes les factures sont dans les délais réglementaires.</div>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 12, alignItems: "start" }}>
@@ -206,7 +241,7 @@ export default function RelancesPage({ factures }) {
               {level === 3 && (
                 <div style={{ padding: "8px 12px", background: "var(--neg-bg)", borderRadius: 8, fontSize: 12, color: "var(--neg-ink)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <AlertTriangle size={13} />
-                  Mise en demeure — document à valeur légale selon Loi 69-21
+                  Mise en demeure — document à valeur légale selon la réglementation en vigueur
                 </div>
               )}
 
@@ -234,7 +269,12 @@ export default function RelancesPage({ factures }) {
             </div>
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button className="btn btn-ghost" disabled={!selectedFactures.length}>Copier</button>
+              <button className="btn btn-ghost" disabled={!selectedFactures.length} onClick={handleCopy}>
+                <Copy size={13} /> Copier
+              </button>
+              <button className="btn" disabled={!selectedFactures.length} onClick={handleExportPDF}>
+                <Download size={13} /> Exporter PDF
+              </button>
               <button className="btn btn-primary" disabled={!selectedFactures.length} onClick={handleSend}>
                 <Send size={13} /> Envoyer · {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""}
               </button>

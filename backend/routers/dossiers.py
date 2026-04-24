@@ -1,17 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
 from models.database import get_db
 from models.schemas import Dossier
 from routers.auth import get_current_user
 from services.extract_societe import extract_societe
 
-router = APIRouter(prefix="/dossiers", tags=["dossiers"])
+router = APIRouter(prefix="/dossiers", tags=["Dossiers"])
 
-@router.get("/")
+
+class DossierDeleteResponse(BaseModel):
+    message: str
+
+
+@router.get(
+    "/",
+    summary="Lister les dossiers",
+    description="Retourne tous les dossiers accessibles a l'utilisateur connecte.",
+)
 def list_dossiers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return db.query(Dossier).all()
 
-@router.post("/")
+
+@router.post(
+    "/",
+    summary="Creer un dossier",
+    description="Cree un nouveau dossier client avec ses informations legales et fiscales.",
+)
 def create_dossier(
     raison_sociale: str,
     ice: str = "",
@@ -29,7 +45,7 @@ def create_dossier(
     site_web: str = "",
     logo_hue: int = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     dossier = Dossier(
         raison_sociale=raison_sociale,
@@ -53,38 +69,53 @@ def create_dossier(
     db.refresh(dossier)
     return dossier
 
-@router.post("/extract-societe")
-async def extract_societe_from_doc(
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_user)
-):
+
+@router.post(
+    "/extract-societe",
+    summary="Extraire les informations d'une societe depuis un document",
+    description="Analyse un PDF, JPG, PNG ou XML pour pre-remplir un dossier societe.",
+)
+async def extract_societe_from_doc(file: UploadFile = File(...), current_user=Depends(get_current_user)):
     allowed = {"pdf", "jpg", "jpeg", "png", "xml"}
     ext = (file.filename or "").rsplit(".", 1)[-1].lower()
     if ext not in allowed:
-        raise HTTPException(status_code=400, detail=f"Format non supporté : .{ext}. Utilisez PDF, JPG, PNG ou XML.")
+        raise HTTPException(status_code=400, detail=f"Format non supporte : .{ext}. Utilisez PDF, JPG, PNG ou XML.")
+
     data = await file.read()
     if len(data) > 20 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Fichier trop lourd (max 20 Mo)")
+
     try:
         result = extract_societe(data, file.filename)
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur d'extraction : {str(e)}")
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erreur d'extraction : {str(exc)}")
     return result
 
-@router.get("/{dossier_id}")
+
+@router.get(
+    "/{dossier_id}",
+    summary="Recuperer un dossier",
+    description="Retourne les informations detaillees d'un dossier par son identifiant.",
+)
 def get_dossier(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     dossier = db.query(Dossier).filter(Dossier.id == dossier_id).first()
     if not dossier:
         raise HTTPException(status_code=404, detail="Dossier introuvable")
     return dossier
 
-@router.delete("/{dossier_id}")
+
+@router.delete(
+    "/{dossier_id}",
+    response_model=DossierDeleteResponse,
+    summary="Supprimer un dossier",
+    description="Supprime le dossier cible si celui-ci existe.",
+)
 def delete_dossier(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     dossier = db.query(Dossier).filter(Dossier.id == dossier_id).first()
     if not dossier:
         raise HTTPException(status_code=404, detail="Dossier introuvable")
     db.delete(dossier)
     db.commit()
-    return {"message": "Dossier supprimé"}
+    return {"message": "Dossier supprime"}

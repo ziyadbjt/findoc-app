@@ -67,3 +67,16 @@ class Ecriture(Base):
     debit = Column(Float, default=0)
     credit = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Correction(Base):
+    __tablename__ = "corrections"
+    id = Column(Integer, primary_key=True, index=True)
+    dossier_id = Column(Integer, ForeignKey("dossiers.id"))
+    facture_id = Column(Integer, ForeignKey("factures.id"), nullable=True)
+    fournisseur = Column(String)
+    description = Column(String, nullable=True)
+    montant = Column(Float, nullable=True)
+    champ = Column(String)           # e.g. "compte_pcm", "code_tiers", "fournisseur"
+    valeur_originale = Column(String)
+    valeur_corrigee = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
