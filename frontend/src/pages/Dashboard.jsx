@@ -235,7 +235,7 @@ export default function Dashboard() {
     ? [dossier.raison_sociale, ...(CRUMBS[route] || ["Dossier"]).slice(1)]
     : CRUMBS[route] || ["Dossier"];
 
-  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData };
+  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user };
 
   return (
     <div className="app-topnav" data-density={density}>

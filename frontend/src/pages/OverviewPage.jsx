@@ -1,8 +1,20 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown,
+  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
+
+const DASHBOARD_WIDGETS = [
+  { key: "hero", label: "Vue executive", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
+  { key: "finance", label: "Tendance & balance agee", desc: "Flux d'achats et exposition fournisseurs." },
+  { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice precedent." },
+  { key: "suppliers", label: "Top fournisseurs", desc: "Concentration des achats par tiers." },
+  { key: "activity", label: "Activite du dossier", desc: "Actions recentes et signaux de suivi." },
+];
+
+function getDashboardPrefsKey(user, dossier) {
+  return `findoc:dashboard:${user?.email || "anon"}:${dossier?.id || "global"}`;
+}
 
 function MiniTrend({ data, color = "var(--accent)" }) {
   const width = 180;
@@ -99,8 +111,33 @@ function ComparaisonNvsN1({ factures }) {
   );
 }
 
-export default function OverviewPage({ factures, dossier, onNavigate }) {
+export default function OverviewPage({ factures, dossier, onNavigate, user }) {
   const now = new Date();
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [visibleWidgets, setVisibleWidgets] = useState(() =>
+    DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {})
+  );
+
+  useEffect(() => {
+    const key = getDashboardPrefsKey(user, dossier);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: parsed?.[widget.key] !== false }), {}));
+    } catch {
+      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
+    }
+  }, [dossier, user]);
+
+  const updateWidgetVisibility = (key, checked) => {
+    const next = { ...visibleWidgets, [key]: checked };
+    setVisibleWidgets(next);
+    localStorage.setItem(getDashboardPrefsKey(user, dossier), JSON.stringify(next));
+  };
 
   const aging = useMemo(() => {
     const buckets = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
@@ -142,13 +179,53 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
 
   return (
     <div className="page-inner">
-      <section
-        className="card"
-        style={{
-          padding: 28,
-          marginBottom: 16,
-        }}
-      >
+      {showCustomize && (
+        <>
+          <div className="scrim" onClick={() => setShowCustomize(false)} />
+          <div className="drawer" style={{ width: 420 }}>
+            <div className="drawer-head">
+              <Settings2 size={16} style={{ color: "var(--ink-1)" }} />
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Personnaliser le dashboard</div>
+              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setShowCustomize(false)}><X size={15} /></button>
+            </div>
+            <div className="drawer-body" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+              {DASHBOARD_WIDGETS.map((widget) => (
+                <label key={widget.key} className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-start", background: "var(--bg-inset)" }}>
+                  <input
+                    type="checkbox"
+                    checked={visibleWidgets[widget.key] !== false}
+                    onChange={(event) => updateWidgetVisibility(widget.key, event.target.checked)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{widget.label}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 4 }}>{widget.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+          Choisis les blocs visibles dans ton aperçu.
+        </div>
+        <button className="btn btn-secondary" onClick={() => setShowCustomize(true)}>
+          <Settings2 size={14} />
+          Personnaliser le dashboard
+        </button>
+      </div>
+
+      {visibleWidgets.hero !== false && (
+        <section
+          className="card"
+          style={{
+            padding: 28,
+            marginBottom: 16,
+          }}
+        >
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.9fr)", gap: 20, alignItems: "stretch" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div>
@@ -224,9 +301,11 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(340px, 0.85fr)", gap: 16, marginBottom: 16 }}>
+      {visibleWidgets.finance !== false && (
+        <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(340px, 0.85fr)", gap: 16, marginBottom: 16 }}>
         <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 }}>
             <div>
@@ -287,12 +366,15 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
             })}
           </div>
         </div>
-      </section>
+        </section>
+      )}
 
-      <ComparaisonNvsN1 factures={factures} />
+      {visibleWidgets.comparison !== false && <ComparaisonNvsN1 factures={factures} />}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
-        <div className="card" style={{ padding: 24 }}>
+      {(visibleWidgets.suppliers !== false || visibleWidgets.activity !== false) && (
+        <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
+        {visibleWidgets.suppliers !== false && (
+          <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
               <div className="kpi-label">Concentration</div>
@@ -327,9 +409,11 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
               </div>
             ))}
           </div>
-        </div>
+          </div>
+        )}
 
-        <div className="card" style={{ padding: 24 }}>
+        {visibleWidgets.activity !== false && (
+          <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
               <div className="kpi-label">Actions recentes</div>
@@ -351,8 +435,10 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
               </div>
             ))}
           </div>
-        </div>
-      </section>
+          </div>
+        )}
+        </section>
+      )}
     </div>
   );
 }
