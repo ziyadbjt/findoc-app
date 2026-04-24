@@ -103,6 +103,7 @@
   position: relative;
   border: 1px solid transparent;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .topnav-item:hover {
@@ -115,6 +116,22 @@
   color: #fff;
   border-color: rgba(143, 212, 188, 0.28);
   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.topnav-item-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transform: translateX(-4px);
+  transition: max-width 220ms ease, opacity 160ms ease, transform 220ms ease;
+}
+
+.topnav-item:hover .topnav-item-label,
+.topnav-item.active .topnav-item-label {
+  max-width: 120px;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .topnav-badge {

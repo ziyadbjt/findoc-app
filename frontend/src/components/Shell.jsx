@@ -83,7 +83,7 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
             title={n.label}
           >
             {n.icon}
-            {route === n.key && <span>{n.label}</span>}
+            <span className="topnav-item-label">{n.label}</span>
             {n.badge > 0 && <span className="topnav-badge">{n.badge}</span>}
           </button>
         ))}
@@ -94,7 +94,7 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
           style={{ marginLeft: "auto" }}
         >
           <Settings size={14} />
-          {route === "parametres" && <span>Paramètres</span>}
+          <span className="topnav-item-label">Paramètres</span>
         </button>
       </nav>
 
