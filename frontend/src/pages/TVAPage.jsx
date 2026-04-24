@@ -237,17 +237,42 @@ export default function TVAPage({ factures, dossier }) {
 }
 
 function KPI({ icon, label, value, unit = "MAD", tone }) {
+  const palette = {
+    ink: {
+      icon: "var(--ink-0)",
+      value: "var(--ink-0)",
+      unit: "var(--ink-2)",
+    },
+    accent: {
+      icon: "#8a6508",
+      value: "#7a5a00",
+      unit: "#7a5a00",
+    },
+    warn: {
+      icon: "#c79a22",
+      value: "#c79a22",
+      unit: "#d6aa35",
+    },
+    pos: {
+      icon: "#2f7a5d",
+      value: "#2f7a5d",
+      unit: "#4f8d7d",
+    },
+  };
+
+  const colors = palette[tone] || palette.ink;
+
   return (
     <div className="kpi">
       <div className="kpi-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ color: `var(--${tone}-ink)` }}>{icon}</span>
+        <span style={{ color: colors.icon }}>{icon}</span>
         <span>{label}</span>
       </div>
       <div className="kpi-value">
-        <span className="tabular" style={{ color: `var(--${tone}-ink)` }}>
+        <span className="tabular" style={{ color: colors.value }}>
           {typeof value === "number" && unit ? formatMAD(value).split(",")[0] : value}
         </span>
-        <span className="unit">{unit}</span>
+        <span className="unit" style={{ color: colors.unit }}>{unit}</span>
       </div>
     </div>
   );

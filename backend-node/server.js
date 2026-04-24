@@ -63,11 +63,36 @@ print(json.dumps({"lastrowid": rowid}))
   }
 }
 
+function ensureSchema() {
+  if (!PYTHON || !fs.existsSync(DB_PATH)) return;
+  const script = `
+import sqlite3
+conn = sqlite3.connect(${JSON.stringify(DB_PATH)})
+conn.execute("""
+CREATE TABLE IF NOT EXISTS team_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dossier_id INTEGER NOT NULL,
+  user_id INTEGER,
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.commit()
+conn.close()
+print("ok")
+`;
+  try {
+    execFileSync(PYTHON, ["-c", script], { timeout: 5000, encoding: "utf8" });
+  } catch {}
+}
+
 const tokens = {};
 let nextId = 100;
 const memDossiers = [];
 
 const USERS = { "ziyad@cabinetchami.ma": { email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin" } };
+
+ensureSchema();
 
 function requireAuth(req, res) {
   const authHeader = req.headers.authorization;
@@ -262,6 +287,76 @@ print(json.dumps(result))
     const msg = (error.stderr || error.message || "").slice(0, 300);
     res.status(500).json({ detail: `Erreur extraction : ${msg}` });
   }
+});
+
+app.get("/chat/team/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const rows = sqlQuery(
+    `
+    SELECT
+      tm.id,
+      tm.dossier_id,
+      tm.user_id,
+      tm.content,
+      tm.created_at,
+      COALESCE(u.nom, u.email, ?) AS user_name,
+      COALESCE(u.email, ?) AS user_email
+    FROM team_messages tm
+    LEFT JOIN users u ON u.id = tm.user_id
+    WHERE tm.dossier_id = ?
+    ORDER BY tm.created_at ASC, tm.id ASC
+    `,
+    [email, email, req.params.dossier_id]
+  );
+
+  res.json(rows || []);
+});
+
+app.post("/chat/team/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const content = (req.body?.content || "").trim();
+  if (!content) return res.status(400).json({ detail: "Message vide" });
+
+  const user = (sqlQuery("SELECT id, email, nom FROM users WHERE email = ?", [email]) || [])[0];
+  const insert = sqlRun(
+    "INSERT INTO team_messages (dossier_id, user_id, content, created_at) VALUES (?, ?, ?, datetime('now'))",
+    [req.params.dossier_id, user?.id || null, content]
+  );
+
+  if (!insert?.lastrowid) {
+    return res.status(500).json({ detail: "Impossible d'envoyer le message" });
+  }
+
+  const row = (sqlQuery(
+    `
+    SELECT
+      tm.id,
+      tm.dossier_id,
+      tm.user_id,
+      tm.content,
+      tm.created_at,
+      COALESCE(u.nom, u.email, ?) AS user_name,
+      COALESCE(u.email, ?) AS user_email
+    FROM team_messages tm
+    LEFT JOIN users u ON u.id = tm.user_id
+    WHERE tm.id = ?
+    `,
+    [email, email, insert.lastrowid]
+  ) || [])[0];
+
+  res.json(row || {
+    id: insert.lastrowid,
+    dossier_id: Number(req.params.dossier_id),
+    user_id: user?.id || null,
+    user_name: user?.nom || user?.email || email,
+    user_email: user?.email || email,
+    content,
+    created_at: new Date().toISOString(),
+  });
 });
 
 app.get("/", (req, res) => res.json({ message: "FinDoc API is running", db: !!PYTHON && fs.existsSync(DB_PATH) }));

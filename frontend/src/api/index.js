@@ -107,6 +107,12 @@ export async function sendChatMessage(token, payload, handlers = {}) {
   if (buffer.trim()) emitEvent(buffer);
 }
 
+export const getTeamMessages = (token, dossierId) =>
+  axios.get(`${BASE}/chat/team/${dossierId}`, auth(token));
+
+export const postTeamMessage = (token, dossierId, content) =>
+  axios.post(`${BASE}/chat/team/${dossierId}`, { content }, auth(token));
+
 export const recordCorrection = (token, payload) =>
   axios.post(`${BASE}/learning/correction`, payload, auth(token));
 
