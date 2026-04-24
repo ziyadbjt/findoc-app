@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 
@@ -84,6 +84,8 @@ export default function TresoPage({ factures, dossier }) {
 
   const solde90 = forecast90.length > 0 ? forecast90[forecast90.length - 1].solde : soldeInitial;
   const trend = solde90 > soldeInitial;
+  const [hoveredFlux, setHoveredFlux] = useState(null);
+  const [hoveredKpi, setHoveredKpi] = useState(null);
 
   // Prochains flux significatifs
   const upcomingFlux = useMemo(() => {
@@ -110,21 +112,30 @@ export default function TresoPage({ factures, dossier }) {
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 11, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Solde actuel estimé</div>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--ink-0)" }}>{formatMAD(soldeInitial).split(",")[0]}</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 4 }}>MAD</div>
-        </div>
-        <div className="card" style={{ padding: 20, background: "var(--pos-bg)" }}>
-          <div style={{ fontSize: 11, color: "var(--pos-ink)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Encaissements attendus</div>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--pos-ink)" }}>{formatMAD(totalEncaissements).split(",")[0]}</div>
-          <div style={{ fontSize: 11.5, color: "var(--pos-ink)", marginTop: 4, opacity: 0.7 }}>MAD · ventes non encaissées</div>
-        </div>
-        <div className="card" style={{ padding: 20, background: totalDecaissements > soldeInitial ? "var(--neg-bg)" : "var(--bg-inset)" }}>
-          <div style={{ fontSize: 11, color: totalDecaissements > soldeInitial ? "var(--neg-ink)" : "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Décaissements à venir</div>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-mono)", color: totalDecaissements > soldeInitial ? "var(--neg-ink)" : "var(--ink-0)" }}>{formatMAD(totalDecaissements).split(",")[0]}</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 4 }}>MAD · factures non payées</div>
-        </div>
+        {[
+          { id: 0, label: "Solde actuel estimé", value: formatMAD(soldeInitial).split(",")[0], sub: "MAD", bg: undefined, color: "var(--ink-2)", valColor: "var(--ink-0)" },
+          { id: 1, label: "Encaissements attendus", value: formatMAD(totalEncaissements).split(",")[0], sub: "MAD · ventes non encaissées", bg: "var(--pos-bg)", color: "var(--pos-ink)", valColor: "var(--pos-ink)" },
+          { id: 2, label: "Décaissements à venir", value: formatMAD(totalDecaissements).split(",")[0], sub: "MAD · factures non payées", bg: totalDecaissements > soldeInitial ? "var(--neg-bg)" : "var(--bg-inset)", color: totalDecaissements > soldeInitial ? "var(--neg-ink)" : "var(--ink-2)", valColor: totalDecaissements > soldeInitial ? "var(--neg-ink)" : "var(--ink-0)" },
+        ].map(({ id, label, value, sub, bg, color, valColor }) => (
+          <div
+            key={id}
+            className="card"
+            onMouseEnter={() => setHoveredKpi(id)}
+            onMouseLeave={() => setHoveredKpi(null)}
+            style={{
+              padding: 20,
+              background: bg,
+              transform: hoveredKpi === id ? "translateY(-3px)" : "translateY(0)",
+              boxShadow: hoveredKpi === id ? "0 8px 24px rgba(0,0,0,0.18)" : undefined,
+              transition: "transform 180ms ease, box-shadow 180ms ease",
+              cursor: "default",
+            }}
+          >
+            <div style={{ fontSize: 11, color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-mono)", color: valColor }}>{value}</div>
+            <div style={{ fontSize: 11.5, color: hoveredKpi === id ? color : "var(--ink-3)", marginTop: 4, transition: "color 180ms ease" }}>{sub}</div>
+          </div>
+        ))}
       </div>
 
       {/* Graphique */}
@@ -157,20 +168,44 @@ export default function TresoPage({ factures, dossier }) {
           {upcomingFlux.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--ink-3)" }}>Aucune échéance à venir.</div>
           ) : (
-            upcomingFlux.map((f, i) => (
-              <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--line-1)" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: f.isVente ? "var(--pos-bg)" : "var(--neg-bg)", color: f.isVente ? "var(--pos-ink)" : "var(--neg-ink)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                  {f.isVente ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            upcomingFlux.map((f, i) => {
+              const rowId = f.id || i;
+              const isHovered = hoveredFlux === rowId;
+              return (
+                <div
+                  key={rowId}
+                  onMouseEnter={() => setHoveredFlux(rowId)}
+                  onMouseLeave={() => setHoveredFlux(null)}
+                  style={{
+                    borderBottom: "1px solid var(--line-1)",
+                    background: isHovered ? "rgba(143, 212, 188, 0.05)" : "transparent",
+                    transition: "background 150ms ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: f.isVente ? "var(--pos-bg)" : "var(--neg-bg)", color: f.isVente ? "var(--pos-ink)" : "var(--neg-ink)", display: "grid", placeItems: "center", flexShrink: 0, transition: "transform 150ms ease", transform: isHovered ? "scale(1.08)" : "scale(1)" }}>
+                      {f.isVente ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }} className="truncate">{f.fournisseur || "—"}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>Dans {f.daysLeft}j · {formatDate(f.date_echeance)}</div>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: f.isVente ? "var(--pos-ink)" : "var(--neg-ink)" }}>
+                      {f.isVente ? "+" : "-"}{formatMAD(f.montant_ttc || 0).split(",")[0]}
+                    </div>
+                  </div>
+                  {/* Détails expandés */}
+                  <div style={{ maxHeight: isHovered ? 48 : 0, overflow: "hidden", transition: "max-height 220ms ease" }}>
+                    <div style={{ display: "flex", gap: 16, padding: "0 18px 12px 66px", fontSize: 11.5, color: "var(--ink-3)" }}>
+                      {f.num_facture && <span style={{ fontFamily: "var(--font-mono)" }}>{f.num_facture}</span>}
+                      {f.statut && <span className={`badge${f.statut === "traite" || f.statut === "traité" ? " pos" : f.statut === "a_valider" ? " warn" : ""}`}>{f.statut}</span>}
+                      {f.montant_ht != null && <span>HT {formatMAD(f.montant_ht).split(",")[0]} · TVA {formatMAD((f.tva || 0)).split(",")[0]}</span>}
+                      {f.categorie && <span style={{ color: "var(--ink-2)" }}>{f.categorie}</span>}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }} className="truncate">{f.fournisseur || "—"}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>Dans {f.daysLeft}j · {formatDate(f.date_echeance)}</div>
-                </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: f.isVente ? "var(--pos-ink)" : "var(--neg-ink)" }}>
-                  {f.isVente ? "+" : "-"}{formatMAD(f.montant_ttc || 0).split(",")[0]}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
-import { exportJournal, uploadBankStatement, uploadFactures } from "../api";
+import { uploadBankStatement, uploadFactures } from "../api";
+import ExportDialog from "../components/ExportDialog";
 import FactureDetail from "../components/FactureDetail";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -282,6 +283,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
@@ -344,20 +346,6 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const res = await exportJournal(token, dossierId);
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `journal_${dossierId}.xlsx`;
-      anchor.click();
-      toast("Export SAGE 100 genere", "pos");
-    } catch {
-      toast("Erreur export", "neg");
-    }
-  };
-
   const totalTTC = filtered.reduce((sum, facture) => sum + (facture.montant_ttc || 0), 0);
 
   return (
@@ -368,8 +356,8 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
           <p className="page-subtitle">{factures.length} total · {formatMAD(factures.reduce((sum, facture) => sum + (facture.montant_ttc || 0), 0))} MAD</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-secondary" onClick={handleExport}><Download size={13} /> SAGE 100</button>
-          <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={13} /> Uploader</button>
+          <button className="btn btn-secondary" onClick={() => setShowExport(true)}><Download size={13} /> Exporter</button>
+          <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={13} /> Importer</button>
         </div>
       </div>
 
@@ -476,7 +464,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
           <div className="scrim" onClick={() => { setShowUpload(false); setUploadFiles([]); }} />
           <div className="modal">
             <div className="modal-head">
-              <FileText size={16} /><div style={{ fontWeight: 500, fontSize: 14 }}>Uploader des factures</div>
+              <FileText size={16} /><div style={{ fontWeight: 500, fontSize: 14 }}>Importer des factures</div>
               <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => { setShowUpload(false); setUploadFiles([]); }}><X size={15} /></button>
             </div>
             <div className="modal-body">
@@ -507,6 +495,15 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
           </div>
         </>
       )}
+
+      <ExportDialog
+        open={showExport}
+        onClose={() => setShowExport(false)}
+        dossierId={dossierId}
+        factures={factures}
+        ecritures={ecritures}
+        defaultJournal={tab}
+      />
 
       {selected && (
         <FactureDetail facture={selected} ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)} onClose={() => setSelected(null)} onUpdate={() => { setSelected(null); onRefresh(); }} dossierId={dossierId} />
