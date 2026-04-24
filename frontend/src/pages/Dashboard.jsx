@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { RefreshCw } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -51,6 +52,10 @@ export default function Dashboard() {
   const [showCmd, setShowCmd] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pageRef = useRef(null);
+  const pullRef = useRef({ startY: 0, active: false, engaged: false, distance: 0, refreshing: false });
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -98,6 +103,99 @@ export default function Dashboard() {
     loadData();
   }, [loadData]);
 
+  const runPullRefresh = useCallback(async () => {
+    pullRef.current.refreshing = true;
+    setPullRefreshing(true);
+    setPullDistance(56);
+    try {
+      await loadData();
+      toast("Page actualisee", "pos");
+    } catch {
+      toast("Erreur lors de l'actualisation", "neg");
+    } finally {
+      pullRef.current.refreshing = false;
+      setPullRefreshing(false);
+      setPullDistance(0);
+      pullRef.current.distance = 0;
+    }
+  }, [loadData, toast]);
+
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+
+    const threshold = 84;
+    const maxPull = 120;
+
+    const onTouchStart = (event) => {
+      if (page.scrollTop > 0 || pullRef.current.refreshing) return;
+      pullRef.current = {
+        startY: event.touches[0]?.clientY || 0,
+        active: true,
+        engaged: false,
+        distance: 0,
+        refreshing: false,
+      };
+    };
+
+    const onTouchMove = (event) => {
+      const state = pullRef.current;
+      if (!state.active || state.refreshing) return;
+      if (page.scrollTop > 0) {
+        pullRef.current.active = false;
+        pullRef.current.distance = 0;
+        setPullDistance(0);
+        return;
+      }
+
+      const currentY = event.touches[0]?.clientY || 0;
+      const delta = currentY - state.startY;
+      if (delta <= 0) {
+        setPullDistance(0);
+        return;
+      }
+
+      const nextDistance = Math.min(maxPull, delta * 0.45);
+      if (nextDistance > 4) {
+        pullRef.current.engaged = true;
+        event.preventDefault();
+      }
+      pullRef.current.distance = nextDistance;
+      setPullDistance(nextDistance);
+    };
+
+    const onTouchEnd = async () => {
+      const state = pullRef.current;
+      pullRef.current = { ...pullRef.current, startY: 0, active: false, engaged: false };
+
+      if (!state.engaged) {
+        pullRef.current.distance = 0;
+        setPullDistance(0);
+        return;
+      }
+
+      if (state.distance >= threshold) {
+        await runPullRefresh();
+        return;
+      }
+
+      pullRef.current.distance = 0;
+      setPullDistance(0);
+    };
+
+    page.addEventListener("touchstart", onTouchStart, { passive: true });
+    page.addEventListener("touchmove", onTouchMove, { passive: false });
+    page.addEventListener("touchend", onTouchEnd);
+    page.addEventListener("touchcancel", onTouchEnd);
+
+    return () => {
+      page.removeEventListener("touchstart", onTouchStart);
+      page.removeEventListener("touchmove", onTouchMove);
+      page.removeEventListener("touchend", onTouchEnd);
+      page.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [runPullRefresh]);
+
   const counts = {
     factures: factures.filter((f) => f.statut === "a_valider" || f.statut === "à_valider").length,
     recon: 0,
@@ -137,7 +235,7 @@ export default function Dashboard() {
     ? [dossier.raison_sociale, ...(CRUMBS[route] || ["Dossier"]).slice(1)]
     : CRUMBS[route] || ["Dossier"];
 
-  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData };
+  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user };
 
   return (
     <div className="app-topnav" data-density={density}>
@@ -156,18 +254,38 @@ export default function Dashboard() {
         hasNotifs={MOCK_NOTIFICATIONS.length > 0}
       />
 
-      <main className="page" style={{ background: "transparent" }}>
-        {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-        {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-        {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-        {route === "relances" && <RelancesPage {...pageProps} />}
-        {route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
-        {route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
-        {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
-        {route === "audit" && <AuditPage dossier={dossier} user={user} />}
-        {route === "anomalies" && <AnomaliesPage factures={factures} />}
-        {route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
-        {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+      <main
+        ref={pageRef}
+        className="page"
+        style={{
+          background: "transparent",
+          transform: pullDistance ? `translateY(${pullDistance}px)` : undefined,
+          transition: pullRefreshing || pullDistance === 0 ? "transform 180ms ease" : "none",
+        }}
+      >
+        <div
+          className={`pull-refresh-indicator ${pullDistance > 6 ? "visible" : ""} ${pullRefreshing ? "refreshing" : ""}`}
+          style={{
+            opacity: pullDistance ? 1 : 0,
+            transform: `translate(-50%, ${Math.max(-10, pullDistance - 56)}px)`,
+          }}
+        >
+          <RefreshCw size={14} />
+          <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
+        </div>
+        <div key={route} className="page-transition">
+          {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
+          {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
+          {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
+          {route === "relances" && <RelancesPage {...pageProps} />}
+          {route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
+          {route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
+          {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
+          {route === "audit" && <AuditPage dossier={dossier} user={user} />}
+          {route === "anomalies" && <AnomaliesPage factures={factures} />}
+          {route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
+          {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+        </div>
       </main>
 
       <CmdK

@@ -75,17 +75,27 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
 
       {/* Nav links */}
       <nav className="topnav-links">
-        {nav.map((n) => (
+        {nav.filter(n => n.key !== "parametres").map((n) => (
           <button
             key={n.key}
             className={`topnav-item${route === n.key ? " active" : ""}`}
             onClick={() => setRoute(n.key)}
+            title={n.label}
           >
             {n.icon}
-            <span>{n.label}</span>
+            <span className="topnav-item-label">{n.label}</span>
             {n.badge > 0 && <span className="topnav-badge">{n.badge}</span>}
           </button>
         ))}
+        <button
+          className={`topnav-item${route === "parametres" ? " active" : ""}`}
+          onClick={() => setRoute("parametres")}
+          title="Paramètres"
+          style={{ marginLeft: "auto" }}
+        >
+          <Settings size={14} />
+          <span className="topnav-item-label">Paramètres</span>
+        </button>
       </nav>
 
       {/* Right actions */}
@@ -124,8 +134,8 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
     { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers") },
     { group: "Navigation", label: "Declaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva") },
     { group: "Navigation", label: "Audit", icon: <ShieldCheck size={14} />, action: () => onNavigate("audit") },
-    { group: "Actions", label: "Uploader des factures", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
-    { group: "Actions", label: "Exporter le journal SAGE 100", icon: <Download size={14} />, action: onExport },
+    { group: "Actions", label: "Importer", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
+    { group: "Actions", label: "Exporter", icon: <Download size={14} />, action: onExport },
     { group: "Actions", label: "Generer une relance", icon: <Send size={14} />, action: () => onNavigate("relances") },
   ], [onNavigate, onUpload, onExport]);
 

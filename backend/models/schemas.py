@@ -80,3 +80,12 @@ class Correction(Base):
     valeur_originale = Column(String)
     valeur_corrigee = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TeamMessage(Base):
+    __tablename__ = "team_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    dossier_id = Column(Integer, ForeignKey("dossiers.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

@@ -107,6 +107,30 @@ export async function sendChatMessage(token, payload, handlers = {}) {
   if (buffer.trim()) emitEvent(buffer);
 }
 
+export const getTeamMessages = (token, dossierId) =>
+  axios.get(`${BASE}/chat/team/${dossierId}`, auth(token));
+
+export const postTeamMessage = (token, dossierId, content) =>
+  axios.post(`${BASE}/chat/team/${dossierId}`, { content }, auth(token));
+
+export const getPrivateChatContacts = (token, dossierId) =>
+  axios.get(`${BASE}/chat/private/${dossierId}/contacts`, auth(token));
+
+export const getPrivateMessages = (token, dossierId, otherUserId) =>
+  axios.get(`${BASE}/chat/private/${dossierId}/${otherUserId}`, auth(token));
+
+export const postPrivateMessage = (token, dossierId, otherUserId, content) =>
+  axios.post(`${BASE}/chat/private/${dossierId}/${otherUserId}`, { content }, auth(token));
+
+export const getAdminUsers = (token) =>
+  axios.get(`${BASE}/admin/users`, auth(token));
+
+export const createAdminUser = (token, payload) =>
+  axios.post(`${BASE}/admin/users`, payload, auth(token));
+
+export const updateAdminUser = (token, id, payload) =>
+  axios.patch(`${BASE}/admin/users/${id}`, payload, auth(token));
+
 export const recordCorrection = (token, payload) =>
   axios.post(`${BASE}/learning/correction`, payload, auth(token));
 

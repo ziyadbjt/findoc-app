@@ -4,6 +4,7 @@ import { ToastProvider } from "./context/ToastContext"
 import Login from "./pages/Login"
 import Dossiers from "./pages/Dossiers"
 import Dashboard from "./pages/Dashboard"
+import AdminPage from "./pages/AdminPage"
 
 // Apply saved theme before first render to avoid flash
 const savedTheme = localStorage.getItem("theme") || "dark";
@@ -29,6 +30,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
+            <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
             <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
             <Route path="*" element={<Navigate to="/dossiers" replace />} />
           </Routes>

@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState, useMemo } from "react";
 import { Download, Search, Upload, FileText, Sparkles, X, CheckCircle, AlertCircle, Clock, Pencil, Check } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
-import { exportJournal, uploadFactures } from "../api";
+import { uploadFactures } from "../api";
+import ExportDialog from "../components/ExportDialog";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useCorrection } from "../hooks/useCorrection";
@@ -256,19 +257,18 @@ function EditableCell({ value, dossierId, ecriture, champ }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5, cursor: "text" }} onClick={() => setEditing(true)}>
-      <span style={{ fontSize: 12 }}>{val || "—"}</span>
-      <Pencil size={10} style={{ opacity: 0.3, flexShrink: 0 }} />
+      <span style={{ fontSize: 12, color: val ? "var(--ink-0)" : "var(--ink-2)" }}>{val || "—"}</span>
+      <Pencil size={10} style={{ opacity: 0.55, color: "var(--ink-2)", flexShrink: 0 }} />
     </div>
   );
 }
 
-function JournalTab({ ecritures, dossierId }) {
-  const { token } = useAuth();
-  const toast = useToast();
+function JournalTab({ ecritures, factures, dossierId }) {
   const [q, setQ] = useState("");
   const [journalFilter, setJournalFilter] = useState("Tous");
   const [sortCol, setSortCol] = useState("date");
   const [sortDir, setSortDir] = useState("desc");
+  const [showExport, setShowExport] = useState(false);
 
   const filtered = useMemo(() => {
     return (ecritures || [])
@@ -305,20 +305,6 @@ function JournalTab({ ecritures, dossierId }) {
     </th>
   );
 
-  const handleExport = async () => {
-    try {
-      const res = await exportJournal(token, dossierId);
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `journal_sage100_${dossierId}.xlsx`;
-      a.click();
-      toast("Journal SAGE 100 exporté", "pos");
-    } catch {
-      toast("Erreur lors de l'export", "neg");
-    }
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="filter-bar">
@@ -337,14 +323,14 @@ function JournalTab({ ecritures, dossierId }) {
               ? <span style={{ color: "var(--pos-ink)", fontSize: 12 }}>✓ Équilibré</span>
               : <span style={{ color: "var(--neg-ink)", fontSize: 12 }}>⚠ Déséquilibré</span>
           )}
-          <button className="btn btn-primary" onClick={handleExport}>
-            <Download size={13} /> Exporter SAGE 100
+          <button className="btn btn-primary" onClick={() => setShowExport(true)}>
+            <Download size={13} /> Exporter
           </button>
         </div>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <table className="table">
+        <table className="table journal-table">
           <thead>
             <tr>
               <Th col="date">Date</Th>
@@ -365,14 +351,14 @@ function JournalTab({ ecritures, dossierId }) {
             {filtered.map((e, i) => (
               <tr key={e.id || i} className="tr-hover">
                 <td className="td">{formatDate(e.date)}</td>
-                <td className="td"><span className="badge">{e.journal || "AC"}</span></td>
+                <td className="td"><span className="badge neutral">{e.journal || "AC"}</span></td>
                 <td className="td mono"><EditableCell value={e.compte} dossierId={dossierId} ecriture={e} champ="compte_pcm" /></td>
-                <td className="td" style={{ fontSize: 12, color: "var(--ink-2)" }}>{e.tiers || "—"}</td>
+                <td className="td" style={{ fontSize: 12, color: e.tiers ? "var(--ink-1)" : "var(--ink-2)" }}>{e.tiers || "—"}</td>
                 <td className="td"><EditableCell value={e.libelle} dossierId={dossierId} ecriture={e} champ="libelle" /></td>
-                <td className="td right tabular" style={{ color: e.debit > 0 ? "var(--ink-0)" : "var(--ink-3)" }}>
+                <td className="td right tabular" style={{ color: e.debit > 0 ? "var(--ink-0)" : "var(--ink-2)" }}>
                   {e.debit > 0 ? formatMAD(e.debit).split(",")[0] : "—"}
                 </td>
-                <td className="td right tabular" style={{ color: e.credit > 0 ? "var(--ink-0)" : "var(--ink-3)" }}>
+                <td className="td right tabular" style={{ color: e.credit > 0 ? "var(--ink-0)" : "var(--ink-2)" }}>
                   {e.credit > 0 ? formatMAD(e.credit).split(",")[0] : "—"}
                 </td>
               </tr>
@@ -391,6 +377,15 @@ function JournalTab({ ecritures, dossierId }) {
           )}
         </table>
       </div>
+
+      <ExportDialog
+        open={showExport}
+        onClose={() => setShowExport(false)}
+        dossierId={dossierId}
+        factures={factures}
+        ecritures={ecritures}
+        defaultJournal="achats"
+      />
     </div>
   );
 }
@@ -416,7 +411,7 @@ export default function JournalPage({ ecritures, factures, dossierId, onRefresh 
       </div>
 
       {tab === "extractions" && <ExtractionsTab factures={factures} dossierId={dossierId} onRefresh={onRefresh} />}
-      {tab === "journal"     && <JournalTab ecritures={ecritures} dossierId={dossierId} />}
+      {tab === "journal"     && <JournalTab ecritures={ecritures} factures={factures} dossierId={dossierId} />}
     </div>
   );
 }
