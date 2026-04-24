@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
 import { uploadBankStatement, uploadFactures } from "../api";
@@ -15,6 +16,8 @@ const TABS = [
   { key: "banque", label: "Banque" },
   { key: "tpe", label: "TPE" },
 ];
+
+const buildTpeStorageKey = (dossierId) => `tpe-transactions:${dossierId || "demo"}`;
 
 
 function StatutBadge({ statut }) {
@@ -262,12 +265,157 @@ function BanqueTab({ factures, dossierId }) {
 }
 
 
-function TPETab() {
+function TPETab({ dossierId, transactions, setTransactions, onExport }) {
+  const toast = useToast();
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const totals = useMemo(() => ({
+    count: transactions.length,
+    amount: transactions.reduce((sum, row) => sum + (Number(row.montant) || 0), 0),
+    settled: transactions.filter((row) => (row.statut || "").toLowerCase() === "valide").length,
+  }), [transactions]);
+
+  const parseCsv = (text) => {
+    const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+    if (!headerLine) return [];
+    const headers = headerLine.split(/[;,]/).map((item) => item.trim().toLowerCase());
+    return lines.map((line, index) => {
+      const values = line.split(/[;,]/);
+      const row = Object.fromEntries(headers.map((header, i) => [header, values[i]?.trim() || ""]));
+      return {
+        id: `tpe-${Date.now()}-${index}`,
+        date: row.date || row.transaction_date || row.created_at || "",
+        reference: row.reference || row.ref || row.operation || `TPE-${index + 1}`,
+        libelle: row.libelle || row.label || row.description || "Encaissement TPE",
+        client: row.client || row.customer || "",
+        terminal: row.terminal || row.tpe || "",
+        canal: row.canal || "TPE",
+        statut: row.statut || row.status || "valide",
+        montant: Number(String(row.montant || row.amount || 0).replace(",", ".")) || 0,
+        tva: Number(String(row.tva || 0).replace(",", ".")) || 0,
+        montant_ht: Number(String(row.montant_ht || row.ht || row.amount_ht || 0).replace(",", ".")) || 0,
+        compte_pcm: row.compte_pcm || "511100",
+      };
+    }).filter((row) => row.date || row.reference || row.montant);
+  };
+
+  const normalizeJsonRows = (rows) =>
+    (rows || []).map((row, index) => ({
+      id: row.id || `tpe-${Date.now()}-${index}`,
+      date: row.date || row.transaction_date || row.created_at || "",
+      reference: row.reference || row.ref || row.operation || `TPE-${index + 1}`,
+      libelle: row.libelle || row.label || row.description || "Encaissement TPE",
+      client: row.client || row.customer || "",
+      terminal: row.terminal || row.tpe || "",
+      canal: row.canal || "TPE",
+      statut: row.statut || row.status || "valide",
+      montant: Number(row.montant ?? row.amount ?? 0) || 0,
+      tva: Number(row.tva ?? 0) || 0,
+      montant_ht: Number(row.montant_ht ?? row.ht ?? row.amount_ht ?? 0) || 0,
+      compte_pcm: row.compte_pcm || "511100",
+    })).filter((row) => row.date || row.reference || row.montant);
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      let rows = [];
+      if (file.name.toLowerCase().endsWith(".json")) {
+        rows = normalizeJsonRows(JSON.parse(await file.text()));
+      } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = normalizeJsonRows(XLSX.utils.sheet_to_json(sheet, { defval: "" }));
+      } else {
+        rows = parseCsv(await file.text());
+      }
+
+      if (!rows.length) {
+        toast("Aucune transaction TPE exploitable trouvee", "neg");
+      } else {
+        setTransactions(rows);
+        toast(`${rows.length} transaction(s) TPE importee(s)`, "pos");
+      }
+    } catch {
+      toast("Erreur import TPE", "neg");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  };
+
   return (
-    <div className="card" style={{ padding: 40, textAlign: "center" }}>
-      <div style={{ fontSize: 28, marginBottom: 12 }}>TPE</div>
-      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Terminal de paiement electronique</div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Connectez votre TPE pour importer automatiquement les transactions.</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="card" style={{ padding: "14px 18px" }}>
+        <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Terminal de paiement electronique</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+              Importez vos remises TPE depuis CSV, JSON ou Excel puis exportez le journal correspondant.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ textAlign: "center", minWidth: 74 }}>
+              <div style={{ fontSize: 20, fontWeight: 600 }}>{totals.count}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Transactions</div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 110 }}>
+              <div className="mono tabular" style={{ fontSize: 20, fontWeight: 600 }}>{formatMAD(totals.amount).split(",")[0]}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Montant total</div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 74 }}>
+              <div style={{ fontSize: 20, fontWeight: 600, color: "var(--pos-ink)" }}>{totals.settled}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Validées</div>
+            </div>
+            <button className="btn btn-secondary" onClick={onExport}>
+              <Download size={13} /> Exporter
+            </button>
+            <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              <Upload size={13} /> {uploading ? "Import..." : "Importer"}
+            </button>
+            <input ref={fileRef} type="file" accept=".csv,.json,.xlsx,.xls" style={{ display: "none" }} onChange={handleImport} />
+          </div>
+        </div>
+      </div>
+
+      {transactions.length === 0 ? (
+        <div className="card" style={{ padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucune transaction TPE importee</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+            Chargez un export de terminal ou un relevé de remises pour alimenter ce journal.
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th className="th">Date</th>
+                <th className="th">Reference</th>
+                <th className="th">Libelle</th>
+                <th className="th">Terminal</th>
+                <th className="th">Statut</th>
+                <th className="th right">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((row) => (
+                <tr key={row.id} className="tr-hover">
+                  <td className="td">{row.date ? formatDateShort(row.date) : "—"}</td>
+                  <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{row.reference || "—"}</td>
+                  <td className="td" style={{ fontWeight: 500 }}>{row.libelle || row.client || "Transaction TPE"}</td>
+                  <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{row.terminal || "—"}</td>
+                  <td className="td"><span className={`badge ${(row.statut || "").toLowerCase() === "valide" ? "pos" : "warn"}`}>{row.statut || "valide"}</span></td>
+                  <td className="td right tabular" style={{ fontWeight: 600, color: "var(--pos-ink)" }}>{formatMAD(row.montant || 0).split(",")[0]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,7 +435,20 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
+  const [tpeTransactions, setTpeTransactions] = useState([]);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      setTpeTransactions(JSON.parse(localStorage.getItem(buildTpeStorageKey(dossierId)) || "[]"));
+    } catch {
+      setTpeTransactions([]);
+    }
+  }, [dossierId]);
+
+  useEffect(() => {
+    localStorage.setItem(buildTpeStorageKey(dossierId), JSON.stringify(tpeTransactions));
+  }, [dossierId, tpeTransactions]);
 
   const tabFactures = factures.filter((facture) => (tab === "achats" ? (facture.type || "achat") === "achat" : tab === "ventes" ? facture.type === "vente" : true));
 
@@ -374,7 +535,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       </div>
 
       {tab === "banque" && <BanqueTab factures={factures} dossierId={dossierId} />}
-      {tab === "tpe" && <TPETab />}
+      {tab === "tpe" && <TPETab dossierId={dossierId} transactions={tpeTransactions} setTransactions={setTpeTransactions} onExport={() => setShowExport(true)} />}
 
       {(tab === "achats" || tab === "ventes") && (
         <>
@@ -502,6 +663,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         dossierId={dossierId}
         factures={factures}
         ecritures={ecritures}
+        tpeTransactions={tpeTransactions}
         defaultJournal={tab}
       />
 

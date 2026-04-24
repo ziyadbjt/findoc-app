@@ -113,6 +113,15 @@ export const getTeamMessages = (token, dossierId) =>
 export const postTeamMessage = (token, dossierId, content) =>
   axios.post(`${BASE}/chat/team/${dossierId}`, { content }, auth(token));
 
+export const getPrivateChatContacts = (token, dossierId) =>
+  axios.get(`${BASE}/chat/private/${dossierId}/contacts`, auth(token));
+
+export const getPrivateMessages = (token, dossierId, otherUserId) =>
+  axios.get(`${BASE}/chat/private/${dossierId}/${otherUserId}`, auth(token));
+
+export const postPrivateMessage = (token, dossierId, otherUserId, content) =>
+  axios.post(`${BASE}/chat/private/${dossierId}/${otherUserId}`, { content }, auth(token));
+
 export const recordCorrection = (token, payload) =>
   axios.post(`${BASE}/learning/correction`, payload, auth(token));
 

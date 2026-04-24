@@ -14,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 const DB_PATH = path.join(__dirname, "..", "backend", "findoc.db");
+const BACKEND_ENV_PATH = path.join(__dirname, "..", "backend", ".env");
 const PYTHON = (() => {
   for (const candidate of ["C:/Python314/python.exe", "python3", "python"]) {
     try {
@@ -23,6 +24,13 @@ const PYTHON = (() => {
   }
   return null;
 })();
+
+function readEnvValue(key) {
+  if (process.env[key]) return process.env[key];
+  if (!fs.existsSync(BACKEND_ENV_PATH)) return "";
+  const match = fs.readFileSync(BACKEND_ENV_PATH, "utf8").match(new RegExp(`^${key}=(.*)$`, "m"));
+  return match?.[1]?.trim()?.replace(/^['"]|['"]$/g, "") || "";
+}
 
 function sqlQuery(sql, params = []) {
   if (!PYTHON || !fs.existsSync(DB_PATH)) return null;
@@ -77,6 +85,16 @@ CREATE TABLE IF NOT EXISTS team_messages (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 )
 """)
+conn.execute("""
+CREATE TABLE IF NOT EXISTS private_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dossier_id INTEGER NOT NULL,
+  sender_id INTEGER,
+  recipient_id INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
 conn.commit()
 conn.close()
 print("ok")
@@ -86,13 +104,223 @@ print("ok")
   } catch {}
 }
 
+function calculerRetard(dateFacture, delaiJours = 60, dateEcheance = null) {
+  const source = dateEcheance || dateFacture;
+  if (!source) return { retard_jours: 0 };
+  const baseDate = new Date(source);
+  if (Number.isNaN(baseDate.getTime())) return { retard_jours: 0 };
+  if (!dateEcheance && dateFacture) baseDate.setDate(baseDate.getDate() + delaiJours);
+  const today = new Date();
+  const diff = today.getTime() - baseDate.getTime();
+  return { retard_jours: Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))) };
+}
+
+function calculerPenalite(montantTtc, retardJours, tauxAnnuel = 2.25) {
+  const montant = Number(montantTtc || 0);
+  const retard = Number(retardJours || 0);
+  if (!montant || !retard) return 0;
+  return (montant * (tauxAnnuel / 100) * retard) / 365;
+}
+
+function buildChatContext(dossierId) {
+  const dossier = (sqlQuery("SELECT * FROM dossiers WHERE id = ?", [dossierId]) || [])[0] || {};
+  const factures = sqlQuery("SELECT * FROM factures WHERE dossier_id = ? ORDER BY date_facture DESC, id DESC", [dossierId]) || [];
+  const factureIds = factures.map((facture) => facture.id).filter(Boolean);
+  const placeholders = factureIds.map(() => "?").join(",");
+  const ecritures = factureIds.length
+    ? (sqlQuery(`SELECT * FROM ecritures WHERE facture_id IN (${placeholders}) ORDER BY id ASC`, factureIds) || [])
+    : [];
+
+  const achats = factures.filter((facture) => (facture.type || "achat") === "achat");
+  const ventes = factures.filter((facture) => facture.type === "vente");
+  const retards = factures.filter((facture) => facture.paiement === "en_retard");
+  const penalites = retards.reduce((total, facture) => {
+    const retard = calculerRetard(facture.date_facture, 60, facture.date_echeance);
+    return total + calculerPenalite(facture.montant_ttc, retard.retard_jours, 2.25);
+  }, 0);
+
+  return {
+    dossier,
+    factures,
+    ecritures,
+    stats: {
+      generated_at: new Date().toISOString(),
+      achats_ttc: Number(achats.reduce((total, facture) => total + Number(facture.montant_ttc || 0), 0).toFixed(2)),
+      ventes_ttc: Number(ventes.reduce((total, facture) => total + Number(facture.montant_ttc || 0), 0).toFixed(2)),
+      tva_deductible: Number(achats.reduce((total, facture) => total + Number(facture.tva || 0), 0).toFixed(2)),
+      tva_collectee: Number(ventes.reduce((total, facture) => total + Number(facture.tva || 0), 0).toFixed(2)),
+      factures_en_retard: retards.length,
+      penalites_totales: Number(penalites.toFixed(2)),
+    },
+  };
+}
+
+function buildChatContextSummary(context) {
+  const dossier = context.dossier || {};
+  const factures = context.factures || [];
+  const stats = context.stats || {};
+  const lines = [
+    `Dossier: ${dossier.raison_sociale || "N/A"} (${dossier.forme_juridique || "N/A"})`,
+    `Ville: ${dossier.ville || "N/A"}`,
+    `Nombre de factures: ${factures.length}`,
+    `Retards: ${stats.factures_en_retard || 0}`,
+    `TVA collectee: ${stats.tva_collectee || 0}`,
+    `TVA deductible: ${stats.tva_deductible || 0}`,
+    "Extraits de factures:",
+  ];
+  factures.slice(0, 12).forEach((facture) => {
+    lines.push(
+      `- ${facture.num_facture || facture.nom_fichier || "Facture"}: ${facture.fournisseur || "N/A"} TTC=${facture.montant_ttc || 0} statut=${facture.paiement || "N/A"} echeance=${facture.date_echeance || "N/A"}`
+    );
+  });
+  return lines.join("\n");
+}
+
+function fallbackChatAnswer(message, context) {
+  const lowered = String(message || "").toLowerCase();
+  const stats = context.stats || {};
+  const factures = context.factures || [];
+
+  if (lowered.includes("retard")) {
+    const retards = factures.filter((facture) => facture.paiement === "en_retard");
+    if (!retards.length) return "Aucune facture en retard n'a ete detectee dans ce dossier.";
+    return [
+      "Factures en retard :",
+      ...retards.slice(0, 10).map((facture) =>
+        `- ${facture.num_facture || facture.nom_fichier || "Facture"} / ${facture.fournisseur || "N/A"} / ${Number(facture.montant_ttc || 0).toFixed(2)} MAD / echeance ${facture.date_echeance || "N/A"}`
+      ),
+    ].join("\n");
+  }
+
+  if (lowered.includes("tva")) {
+    const solde = Number((Number(stats.tva_collectee || 0) - Number(stats.tva_deductible || 0)).toFixed(2));
+    return [
+      `TVA collectee: ${Number(stats.tva_collectee || 0).toFixed(2)} MAD`,
+      `TVA deductible: ${Number(stats.tva_deductible || 0).toFixed(2)} MAD`,
+      `Solde TVA estime: ${solde.toFixed(2)} MAD`,
+    ].join("\n");
+  }
+
+  if (lowered.includes("69-21") || lowered.includes("penalit")) {
+    return `Penalites estimees Loi 69-21: ${Number(stats.penalites_totales || 0).toFixed(2)} MAD.`;
+  }
+
+  return [
+    "Resume dossier:",
+    `- Factures: ${factures.length}`,
+    `- Montant achats TTC: ${Number(stats.achats_ttc || 0).toFixed(2)} MAD`,
+    `- Montant ventes TTC: ${Number(stats.ventes_ttc || 0).toFixed(2)} MAD`,
+    `- Penalites estimees: ${Number(stats.penalites_totales || 0).toFixed(2)} MAD`,
+  ].join("\n");
+}
+
+function writeSse(res, event, data) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+async function streamOpenAIChat({ message, history, context, res }) {
+  const apiKey = readEnvValue("OPENAI_API_KEY");
+  if (!apiKey) {
+    const answer = fallbackChatAnswer(message, context);
+    answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
+    writeSse(res, "done", { ok: true, fallback: true });
+    return;
+  }
+
+  const systemPrompt = [
+    "Tu es FinDoc, copilote comptable marocain.",
+    "Reponds en francais, de maniere concise, claire et operationnelle.",
+    "Base-toi sur le plan comptable marocain, la Loi 69-21 sur les delais de paiement, et les donnees du dossier.",
+    "Quand une information manque, dis-le clairement sans l'inventer.",
+    "",
+    buildChatContextSummary(context),
+  ].join("\n");
+
+  const input = [
+    { role: "system", content: [{ type: "input_text", text: systemPrompt }] },
+    ...(Array.isArray(history) ? history.slice(-8) : []).map((item) => ({
+      role: item.role === "assistant" ? "assistant" : "user",
+      content: [{ type: "input_text", text: String(item.content || "") }],
+    })),
+    { role: "user", content: [{ type: "input_text", text: String(message || "") }] },
+  ];
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4.1-mini",
+      input,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`OpenAI error ${response.status}`);
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const eventBlock of events) {
+      const lines = eventBlock.split("\n").filter(Boolean);
+      const dataLines = lines.filter((line) => line.startsWith("data: ")).map((line) => line.slice(6));
+      for (const rawData of dataLines) {
+        if (rawData === "[DONE]") continue;
+        let payload;
+        try {
+          payload = JSON.parse(rawData);
+        } catch {
+          continue;
+        }
+        if (payload.type === "response.output_text.delta" && payload.delta) {
+          writeSse(res, "chunk", { text: payload.delta });
+        }
+      }
+    }
+  }
+
+  writeSse(res, "done", { ok: true });
+}
+
 const tokens = {};
 let nextId = 100;
 const memDossiers = [];
 
-const USERS = { "ziyad@cabinetchami.ma": { email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin" } };
+const USERS = {
+  "ziyad@cabinetchami.ma": { id: 1, email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin" },
+  "sarah@cabinetchami.ma": { id: 2, email: "sarah@cabinetchami.ma", nom: "Sarah", role: "manager" },
+  "youssef@cabinetchami.ma": { id: 3, email: "youssef@cabinetchami.ma", nom: "Youssef", role: "collaborateur" },
+};
 
 ensureSchema();
+
+function getUserByEmail(email) {
+  const rows = sqlQuery("SELECT id, email, nom, role FROM users WHERE email = ?", [email]);
+  if (rows && rows.length > 0) return rows[0];
+  return USERS[email] || null;
+}
+
+function getUserById(id) {
+  const rows = sqlQuery("SELECT id, email, nom, role FROM users WHERE id = ?", [id]);
+  if (rows && rows.length > 0) return rows[0];
+  return Object.values(USERS).find((user) => Number(user.id) === Number(id)) || null;
+}
+
+function listKnownUsers() {
+  const rows = sqlQuery("SELECT id, email, nom, role FROM users ORDER BY nom ASC, email ASC");
+  if (rows && rows.length > 0) return rows;
+  return Object.values(USERS);
+}
 
 function requireAuth(req, res) {
   const authHeader = req.headers.authorization;
@@ -135,9 +363,7 @@ app.post("/auth/login", express.urlencoded({ extended: true }), (req, res) => {
 app.get("/auth/me", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
-  const rows = sqlQuery("SELECT email, nom, role FROM users WHERE email = ?", [email]);
-  if (rows && rows.length > 0) return res.json(rows[0]);
-  return res.json(USERS[email] || { email, nom: email, role: "user" });
+  return res.json(getUserByEmail(email) || { email, nom: email, role: "user" });
 });
 
 app.get("/dossiers/", (req, res) => {
@@ -261,10 +487,8 @@ app.post("/dossiers/extract-societe", upload.single("file"), (req, res) => {
   const tmpPath = path.join(os.tmpdir(), `findoc_${Date.now()}.${ext}`);
   fs.writeFileSync(tmpPath, req.file.buffer);
 
-  const envPath = path.join(__dirname, "..", "backend", ".env");
-  const apiKey = fs.existsSync(envPath)
-    ? (fs.readFileSync(envPath, "utf8").match(/ANTHROPIC_API_KEY=(.+)/)?.[1]?.trim() || "")
-    : "";
+  const envPath = BACKEND_ENV_PATH;
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
 
   const script = `
 import sys, os, json
@@ -289,29 +513,136 @@ print(json.dumps(result))
   }
 });
 
+app.post("/chat", async (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const dossierId = Number(req.body?.dossier_id);
+  const message = String(req.body?.message || "").trim();
+  const history = Array.isArray(req.body?.historique) ? req.body.historique : [];
+
+  if (!dossierId) return res.status(400).json({ detail: "dossier_id requis" });
+  if (!message) return res.status(400).json({ detail: "message requis" });
+
+  const context = buildChatContext(dossierId);
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  writeSse(res, "ready", { ok: true });
+
+  try {
+    await streamOpenAIChat({ message, history, context, res });
+  } catch (error) {
+    const answer = fallbackChatAnswer(message, context);
+    answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
+    writeSse(res, "done", {
+      ok: true,
+      fallback: true,
+      detail: String(error?.message || "openai_unavailable"),
+    });
+  } finally {
+    res.end();
+  }
+});
+
 app.get("/chat/team/:dossier_id", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
 
   const rows = sqlQuery(
-    `
-    SELECT
-      tm.id,
-      tm.dossier_id,
-      tm.user_id,
-      tm.content,
-      tm.created_at,
-      COALESCE(u.nom, u.email, ?) AS user_name,
-      COALESCE(u.email, ?) AS user_email
-    FROM team_messages tm
-    LEFT JOIN users u ON u.id = tm.user_id
-    WHERE tm.dossier_id = ?
-    ORDER BY tm.created_at ASC, tm.id ASC
-    `,
-    [email, email, req.params.dossier_id]
-  );
+    "SELECT id, dossier_id, user_id, content, created_at FROM team_messages WHERE dossier_id = ? ORDER BY created_at ASC, id ASC",
+    [req.params.dossier_id]
+  ) || [];
 
-  res.json(rows || []);
+  res.json(
+    rows.map((row) => {
+      const author = getUserById(row.user_id) || getUserByEmail(email);
+      return {
+        ...row,
+        user_name: author?.nom || author?.email || email,
+        user_email: author?.email || email,
+      };
+    })
+  );
+});
+
+app.get("/chat/private/:dossier_id/contacts", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const me = getUserByEmail(email);
+  if (!me?.id) return res.json([]);
+
+  const knownUsers = listKnownUsers()
+    .filter((user) => Number(user.id) !== Number(me.id))
+    .map((contact) => {
+      const row = (sqlQuery(
+        `
+        SELECT content, created_at
+        FROM private_messages
+        WHERE dossier_id = ?
+          AND (
+            (sender_id = ? AND recipient_id = ?)
+            OR
+            (sender_id = ? AND recipient_id = ?)
+          )
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        `,
+        [req.params.dossier_id, me.id, contact.id, contact.id, me.id]
+      ) || [])[0];
+      return {
+        id: contact.id,
+        email: contact.email,
+        nom: contact.nom || contact.email,
+        last_message: row?.content || null,
+        last_message_at: row?.created_at || null,
+      };
+    })
+    .sort((a, b) => {
+      if (!a.last_message_at && !b.last_message_at) return String(a.nom).localeCompare(String(b.nom));
+      if (!a.last_message_at) return 1;
+      if (!b.last_message_at) return -1;
+      return String(b.last_message_at).localeCompare(String(a.last_message_at));
+    });
+  res.json(knownUsers);
+});
+
+app.get("/chat/private/:dossier_id/:other_user_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const me = getUserByEmail(email);
+  if (!me?.id) return res.json([]);
+
+  const rows = sqlQuery(
+    `
+    SELECT id, dossier_id, sender_id, recipient_id, content, created_at
+    FROM private_messages
+    WHERE dossier_id = ?
+      AND (
+        (sender_id = ? AND recipient_id = ?)
+        OR
+        (sender_id = ? AND recipient_id = ?)
+      )
+    ORDER BY created_at ASC, id ASC
+    `,
+    [req.params.dossier_id, me.id, req.params.other_user_id, req.params.other_user_id, me.id]
+  ) || [];
+
+  res.json(
+    rows.map((row) => {
+      const sender = getUserById(row.sender_id) || getUserByEmail(email);
+      return {
+        ...row,
+        sender_name: sender?.nom || sender?.email || email,
+        sender_email: sender?.email || email,
+      };
+    })
+  );
 });
 
 app.post("/chat/team/:dossier_id", (req, res) => {
@@ -322,9 +653,10 @@ app.post("/chat/team/:dossier_id", (req, res) => {
   if (!content) return res.status(400).json({ detail: "Message vide" });
 
   const user = (sqlQuery("SELECT id, email, nom FROM users WHERE email = ?", [email]) || [])[0];
+  const fallbackUser = getUserByEmail(email);
   const insert = sqlRun(
     "INSERT INTO team_messages (dossier_id, user_id, content, created_at) VALUES (?, ?, ?, datetime('now'))",
-    [req.params.dossier_id, user?.id || null, content]
+    [req.params.dossier_id, user?.id || fallbackUser?.id || null, content]
   );
 
   if (!insert?.lastrowid) {
@@ -332,28 +664,65 @@ app.post("/chat/team/:dossier_id", (req, res) => {
   }
 
   const row = (sqlQuery(
-    `
-    SELECT
-      tm.id,
-      tm.dossier_id,
-      tm.user_id,
-      tm.content,
-      tm.created_at,
-      COALESCE(u.nom, u.email, ?) AS user_name,
-      COALESCE(u.email, ?) AS user_email
-    FROM team_messages tm
-    LEFT JOIN users u ON u.id = tm.user_id
-    WHERE tm.id = ?
-    `,
-    [email, email, insert.lastrowid]
+    "SELECT id, dossier_id, user_id, content, created_at FROM team_messages WHERE id = ?",
+    [insert.lastrowid]
   ) || [])[0];
 
-  res.json(row || {
+  const author = user || fallbackUser || getUserByEmail(email);
+  res.json(row ? {
+    ...row,
+    user_name: author?.nom || author?.email || email,
+    user_email: author?.email || email,
+  } : {
     id: insert.lastrowid,
     dossier_id: Number(req.params.dossier_id),
-    user_id: user?.id || null,
-    user_name: user?.nom || user?.email || email,
-    user_email: user?.email || email,
+    user_id: author?.id || null,
+    user_name: author?.nom || author?.email || email,
+    user_email: author?.email || email,
+    content,
+    created_at: new Date().toISOString(),
+  });
+});
+
+app.post("/chat/private/:dossier_id/:other_user_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const content = (req.body?.content || "").trim();
+  if (!content) return res.status(400).json({ detail: "Message vide" });
+
+  const me = getUserByEmail(email);
+  const otherUser = getUserById(req.params.other_user_id);
+
+  if (!me?.id || !otherUser?.id) {
+    return res.status(404).json({ detail: "Utilisateur introuvable" });
+  }
+
+  const insert = sqlRun(
+    "INSERT INTO private_messages (dossier_id, sender_id, recipient_id, content, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+    [req.params.dossier_id, me.id, otherUser.id, content]
+  );
+
+  if (!insert?.lastrowid) {
+    return res.status(500).json({ detail: "Impossible d'envoyer le message" });
+  }
+
+  const row = (sqlQuery(
+    "SELECT id, dossier_id, sender_id, recipient_id, content, created_at FROM private_messages WHERE id = ?",
+    [insert.lastrowid]
+  ) || [])[0];
+
+  res.json(row ? {
+    ...row,
+    sender_name: me.nom || me.email,
+    sender_email: me.email,
+  } : {
+    id: insert.lastrowid,
+    dossier_id: Number(req.params.dossier_id),
+    sender_id: me.id,
+    recipient_id: otherUser.id,
+    sender_name: me.nom || me.email,
+    sender_email: me.email,
     content,
     created_at: new Date().toISOString(),
   });

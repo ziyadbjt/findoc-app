@@ -170,12 +170,20 @@ export default function ExportDialog({
   dossierId,
   factures,
   ecritures,
+  tpeTransactions = [],
   defaultJournal = "achats",
 }) {
   const toast = useToast();
   const [format, setFormat] = useState("excel");
   const [journal, setJournal] = useState(defaultJournal);
-  const availableYears = useMemo(() => getAvailableYears(factures, ecritures), [factures, ecritures]);
+  const availableYears = useMemo(() => {
+    const years = new Set(getAvailableYears(factures, ecritures));
+    (tpeTransactions || []).forEach((row) => {
+      const year = extractYear(row.date);
+      if (year) years.add(year);
+    });
+    return [...years].sort((a, b) => b.localeCompare(a));
+  }, [factures, ecritures, tpeTransactions]);
   const [year, setYear] = useState(availableYears[0] || "all");
   const [month, setMonth] = useState("all");
 
@@ -188,8 +196,42 @@ export default function ExportDialog({
     }
   }, [open, defaultJournal, availableYears]);
 
-  const factureRows = useMemo(() => buildFactureRows(factures, journal, year, month), [factures, journal, year, month]);
-  const sageRows = useMemo(() => buildSageRows(ecritures, factures, journal, year, month), [ecritures, factures, journal, year, month]);
+  const factureRows = useMemo(() => {
+    if (journal !== "tpe") return buildFactureRows(factures, journal, year, month);
+    return (tpeTransactions || [])
+      .filter((row) => matchesPeriod(row.date, year, month))
+      .map((row) => ({
+        Journal: "TPE",
+        Type: "tpe",
+        Date: row.date ? formatDate(row.date) : "",
+        Echeance: "",
+        Reference: row.reference || "",
+        Tiers: row.client || row.libelle || "Transaction TPE",
+        CodeTiers: row.terminal || "",
+        ComptePCM: row.compte_pcm || "511100",
+        Categorie: row.canal || "TPE",
+        HT: row.montant_ht || row.montant || 0,
+        TVA: row.tva || 0,
+        TTC: row.montant || 0,
+        Statut: row.statut || "traite",
+        Paiement: "payee",
+      }));
+  }, [factures, journal, year, month, tpeTransactions]);
+  const sageRows = useMemo(() => {
+    if (journal !== "tpe") return buildSageRows(ecritures, factures, journal, year, month);
+    return (tpeTransactions || [])
+      .filter((row) => matchesPeriod(row.date, year, month))
+      .map((row) => ({
+        Journal: "TPE",
+        Date: row.date || "",
+        Piece: row.reference || "",
+        Compte: row.compte_pcm || "511100",
+        Tiers: row.client || row.libelle || "Transaction TPE",
+        Libelle: row.libelle || "Encaissement TPE",
+        Debit: 0,
+        Credit: row.montant || 0,
+      }));
+  }, [ecritures, factures, journal, year, month, tpeTransactions]);
   const rows = format === "sage" ? sageRows : factureRows;
 
   if (!open) return null;
