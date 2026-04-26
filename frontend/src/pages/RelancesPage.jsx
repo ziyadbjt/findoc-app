@@ -1,6 +1,9 @@
 import { useState, useMemo } from "react";
-import { Send, Mail, AlertTriangle, Clock, Check, Download, Copy } from "lucide-react";
+import { Send, Mail, AlertTriangle, Clock, Check, Download, Copy, X } from "lucide-react";
 import { formatMAD, formatDate, daysBetween } from "../utils/format";
+import { sendRelance } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 
 const BAM_RATE = 0.0225;
 const PENALTY_RATE = BAM_RATE + 0.03;
@@ -93,7 +96,9 @@ Cabinet Chami · Expert-Comptable
 `;
 }
 
-export default function RelancesPage({ factures }) {
+export default function RelancesPage({ factures, dossierId }) {
+  const { token } = useAuth();
+  const toast = useToast();
   const now = new Date();
 
   const overdueFactures = useMemo(() => {
@@ -111,6 +116,10 @@ export default function RelancesPage({ factures }) {
   const [level, setLevel] = useState(1);
   const [tone, setTone] = useState("courtois");
   const [sent, setSent] = useState(new Set());
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [destinataireEmail, setDestinatairesEmail] = useState("");
+  const [destinataireNom, setDestinataireNom] = useState("");
+  const [sending, setSending] = useState(false);
 
   const toggleSelect = (id) => {
     setSelected(s => {
@@ -132,9 +141,33 @@ export default function RelancesPage({ factures }) {
   const totalOverdue = overdueFactures.reduce((s, f) => s + (f.montant_ttc || 0), 0);
 
   const handleSend = () => {
-    const ids = new Set([...sent, ...selected]);
-    setSent(ids);
-    setSelected(new Set());
+    if (!selectedFactures.length) return;
+    setShowEmailModal(true);
+  };
+
+  const handleConfirmSend = async () => {
+    if (!destinataireEmail) return;
+    setSending(true);
+    try {
+      const sujet = emailBody.split("\n")[0].replace("Objet : ", "");
+      const res = await sendRelance(token, {
+        facture_ids: selectedFactures.map(f => f.id),
+        destinataire_email: destinataireEmail,
+        destinataire_nom: destinataireNom,
+        sujet,
+        corps: emailBody,
+        niveau: level,
+      });
+      const ids = new Set([...sent, ...selected]);
+      setSent(ids);
+      setSelected(new Set());
+      setShowEmailModal(false);
+      toast(res.data?.message || "Relance envoyée", "pos");
+    } catch {
+      toast("Erreur lors de l'envoi de la relance", "neg");
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleCopy = () => {
@@ -170,6 +203,52 @@ export default function RelancesPage({ factures }) {
 
   return (
     <div className="page-inner">
+
+      {showEmailModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="card" style={{ padding: 24, width: 420, maxWidth: "calc(100vw - 32px)" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Envoyer la relance</div>
+              <button className="icon-btn" onClick={() => setShowEmailModal(false)}><X size={14} /></button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label className="label">Email destinataire *</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="contact@fournisseur.ma"
+                value={destinataireEmail}
+                onChange={e => setDestinatairesEmail(e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label className="label">Nom destinataire</label>
+              <input
+                className="input"
+                type="text"
+                placeholder="Nom du contact"
+                value={destinataireNom}
+                onChange={e => setDestinataireNom(e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div style={{ background: "var(--bg-inset)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--ink-2)", marginBottom: 20 }}>
+              <div style={{ fontWeight: 500, marginBottom: 4, color: "var(--ink-1)" }}>
+                {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} sélectionnée{selectedFactures.length > 1 ? "s" : ""}
+              </div>
+              <div>Niveau {level} · Ton {tone}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost" onClick={() => setShowEmailModal(false)}>Annuler</button>
+              <button className="btn btn-primary" onClick={handleConfirmSend} disabled={!destinataireEmail || sending}>
+                {sending ? "Envoi..." : <><Send size={13} /> Envoyer</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Relances</h1>

@@ -111,6 +111,34 @@ CREATE TABLE IF NOT EXISTS private_messages (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 )
 """)
+conn.execute("""
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  user_email TEXT,
+  action TEXT NOT NULL,
+  ressource TEXT,
+  ressource_id INTEGER,
+  details TEXT,
+  ip TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS relances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  facture_id INTEGER,
+  niveau INTEGER DEFAULT 1,
+  destinataire_email TEXT,
+  destinataire_nom TEXT,
+  sujet TEXT,
+  corps TEXT,
+  envoye INTEGER DEFAULT 0,
+  envoye_at TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
 conn.commit()
 conn.close()
 print("ok")
@@ -235,8 +263,8 @@ function writeSse(res, event, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-async function streamOpenAIChat({ message, history, context, res }) {
-  const apiKey = readEnvValue("OPENAI_API_KEY");
+async function streamClaudeChat({ message, history, context, res }) {
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
   if (!apiKey) {
     const answer = fallbackChatAnswer(message, context);
     answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
@@ -244,68 +272,85 @@ async function streamOpenAIChat({ message, history, context, res }) {
     return;
   }
 
+  const stats = context.stats || {};
+  const alerts = [];
+  if ((stats.factures_en_retard || 0) > 0) {
+    alerts.push(`⚠️ ${stats.factures_en_retard} facture(s) en retard — pénalités estimées Loi 69-21 : ${Number(stats.penalites_totales || 0).toFixed(2)} MAD`);
+  }
+  const soldeTva = Number((stats.tva_collectee || 0) - (stats.tva_deductible || 0));
+  if (soldeTva > 10000) {
+    alerts.push(`⚠️ TVA nette à reverser au DGI : ${soldeTva.toFixed(2)} MAD`);
+  }
+
   const systemPrompt = [
-    "Tu es FinDoc, copilote comptable marocain.",
-    "Reponds en francais, de maniere concise, claire et operationnelle.",
-    "Base-toi sur le plan comptable marocain, la Loi 69-21 sur les delais de paiement, et les donnees du dossier.",
-    "Quand une information manque, dis-le clairement sans l'inventer.",
+    "Tu es FinDoc, copilote comptable expert dédié aux cabinets comptables marocains.",
+    "Réponds TOUJOURS en français, de manière concise, claire et opérationnelle.",
+    "Utilise le Plan Comptable Marocain (PCM), la Loi 69-21 sur les délais de paiement, la TVA à 20% par défaut, et la RAS (retenue à la source).",
+    "Quand une information manque dans les données du dossier, dis-le clairement sans inventer.",
+    "Pour les réponses structurées, utilise du Markdown (listes, gras, tableaux).",
     "",
+    ...(alerts.length ? ["## Alertes actives", ...alerts, ""] : []),
+    "## Contexte du dossier",
     buildChatContextSummary(context),
   ].join("\n");
 
-  const input = [
-    { role: "system", content: [{ type: "input_text", text: systemPrompt }] },
+  const messages = [
     ...(Array.isArray(history) ? history.slice(-8) : []).map((item) => ({
       role: item.role === "assistant" ? "assistant" : "user",
-      content: [{ type: "input_text", text: String(item.content || "") }],
+      content: String(item.content || ""),
     })),
-    { role: "user", content: [{ type: "input_text", text: String(message || "") }] },
+    { role: "user", content: String(message || "") },
   ];
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      input,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
       stream: true,
     }),
   });
 
   if (!response.ok || !response.body) {
-    throw new Error(`OpenAI error ${response.status}`);
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Anthropic error ${response.status}: ${errText.slice(0, 200)}`);
   }
 
   const decoder = new TextDecoder();
+  const reader = response.body.getReader();
   let buffer = "";
+  let finished = false;
 
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
 
-    for (const eventBlock of events) {
-      const lines = eventBlock.split("\n").filter(Boolean);
-      const dataLines = lines.filter((line) => line.startsWith("data: ")).map((line) => line.slice(6));
-      for (const rawData of dataLines) {
-        if (rawData === "[DONE]") continue;
-        let payload;
-        try {
-          payload = JSON.parse(rawData);
-        } catch {
-          continue;
-        }
-        if (payload.type === "response.output_text.delta" && payload.delta) {
-          writeSse(res, "chunk", { text: payload.delta });
-        }
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const rawData = line.slice(6).trim();
+      if (!rawData || rawData === "[DONE]") continue;
+      let payload;
+      try { payload = JSON.parse(rawData); } catch { continue; }
+
+      if (payload.type === "content_block_delta" && payload.delta?.type === "text_delta" && payload.delta.text) {
+        writeSse(res, "chunk", { text: payload.delta.text });
+      } else if (payload.type === "message_stop" || payload.type === "message_delta") {
+        if (!finished) { finished = true; writeSse(res, "done", { ok: true }); }
       }
     }
   }
 
-  writeSse(res, "done", { ok: true });
+  if (!finished) writeSse(res, "done", { ok: true });
 }
 
 const tokens = {};
@@ -442,6 +487,7 @@ app.post("/admin/users", (req, res) => {
   );
 
   if (!insert?.lastrowid) return res.status(500).json({ detail: "Creation impossible" });
+  logAction(admin.email, "create_user", "user", insert.lastrowid, `Utilisateur créé: ${email}`, null);
   res.status(201).json(getUserById(insert.lastrowid));
 });
 
@@ -553,6 +599,16 @@ app.delete("/dossiers/:id", (req, res) => {
   res.json({ message: "Dossier supprime" });
 });
 
+app.delete("/admin/users/:id", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  const user = getUserById(req.params.id);
+  if (!user) return res.status(404).json({ detail: "Utilisateur introuvable" });
+  if (Number(user.id) === Number(admin.id)) return res.status(400).json({ detail: "Impossible de se supprimer soi-meme" });
+  sqlRun("DELETE FROM users WHERE id = ?", [req.params.id]);
+  res.json({ message: "Utilisateur supprime" });
+});
+
 app.get("/factures/:dossier_id", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
@@ -636,8 +692,9 @@ app.post("/chat", async (req, res) => {
   writeSse(res, "ready", { ok: true });
 
   try {
-    await streamOpenAIChat({ message, history, context, res });
+    await streamClaudeChat({ message, history, context, res });
   } catch (error) {
+    console.error("[chat error]", error?.message, error?.stack?.slice(0, 500));
     const answer = fallbackChatAnswer(message, context);
     answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
     writeSse(res, "done", {
@@ -830,10 +887,133 @@ app.post("/chat/private/:dossier_id/:other_user_id", (req, res) => {
   });
 });
 
+// ── Audit log ────────────────────────────────────────────────────────────────
+function logAction(userEmail, action, ressource, ressourceId, details, ip) {
+  try {
+    const user = getUserByEmail(userEmail);
+    sqlRun(
+      "INSERT INTO audit_logs (user_id, user_email, action, ressource, ressource_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+      [user?.id || null, userEmail, action, ressource || null, ressourceId || null, details || null, ip || null]
+    );
+  } catch {}
+}
+
+app.get("/admin/audit", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  const limit = Math.min(500, parseInt(req.query.limit, 10) || 200);
+  const rows = sqlQuery(
+    "SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT ?",
+    [limit]
+  ) || [];
+  res.json(rows);
+});
+
+// ── Relances ─────────────────────────────────────────────────────────────────
+app.post("/relances/send", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const { facture_ids, destinataire_email, destinataire_nom, sujet, corps, niveau } = req.body || {};
+  if (!facture_ids || !facture_ids.length) return res.status(400).json({ detail: "facture_ids requis" });
+
+  const user = getUserByEmail(email);
+  let count = 0;
+
+  for (const facId of facture_ids) {
+    sqlRun(
+      "INSERT INTO relances (facture_id, niveau, destinataire_email, destinataire_nom, sujet, corps, envoye, envoye_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, datetime('now'))",
+      [facId, niveau || 1, destinataire_email || null, destinataire_nom || null, sujet || null, corps || null, user?.id || null]
+    );
+    count++;
+  }
+
+  logAction(email, "send_relance", "relance", null, `${count} relance(s) pour ${destinataire_email || "—"}`, req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
+
+  res.json({ envoye: false, count, message: `${count} relance(s) enregistree(s). Configurez SMTP pour l'envoi réel.` });
+});
+
+app.get("/relances/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+  const factureIds = (sqlQuery("SELECT id FROM factures WHERE dossier_id=?", [req.params.dossier_id]) || []).map((r) => r.id);
+  if (!factureIds.length) return res.json([]);
+  const placeholders = factureIds.map(() => "?").join(",");
+  const rows = sqlQuery(`SELECT * FROM relances WHERE facture_id IN (${placeholders}) ORDER BY created_at DESC`, factureIds) || [];
+  res.json(rows);
+});
+
+// ── DGI TVA export ────────────────────────────────────────────────────────────
+app.get("/factures/:dossier_id/export-dgi", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const dossierId = req.params.dossier_id;
+  const mois = parseInt(req.query.mois, 10) || 0;
+  const annee = parseInt(req.query.annee, 10) || 0;
+
+  let factures = sqlQuery("SELECT * FROM factures WHERE dossier_id=?", [dossierId]) || [];
+
+  if (mois && annee) {
+    factures = factures.filter((f) => {
+      if (!f.date_facture) return false;
+      const d = new Date(String(f.date_facture).slice(0, 7));
+      return d.getMonth() + 1 === mois && d.getFullYear() === annee;
+    });
+  } else if (annee) {
+    factures = factures.filter((f) => f.date_facture && String(f.date_facture).startsWith(String(annee)));
+  }
+
+  const achats = factures.filter((f) => (f.type || "achat") === "achat");
+  const ventes = factures.filter((f) => f.type === "vente");
+  const tvaCollectee = ventes.reduce((s, f) => s + Number(f.tva || 0), 0);
+  const tvaDeductible = achats.reduce((s, f) => s + Number(f.tva || 0), 0);
+  const solde = Math.round((tvaCollectee - tvaDeductible) * 100) / 100;
+
+  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const periode = mois && annee ? `${String(mois).padStart(2, "0")}/${annee}` : String(annee || "Tous");
+
+  const lines = [
+    `=== DECLARATION TVA — Format DGI Maroc ===`,
+    `Dossier ID;${dossierId}`,
+    `Periode;${periode}`,
+    `Genere le;${now}`,
+    ``,
+    `RUBRIQUE;BASE HT (MAD);TAUX TVA (%);TVA (MAD)`,
+    ...ventes.map((f) => {
+      const ht = Math.round(Number(f.montant_ht || 0) * 100) / 100;
+      const tva = Math.round(Number(f.tva || 0) * 100) / 100;
+      const taux = ht ? Math.round((tva / ht) * 10000) / 100 : 20;
+      return `Vente - ${f.fournisseur || "Client"};${ht};${taux};${tva}`;
+    }),
+    ``,
+    `TOTAL TVA COLLECTEE;;;${Math.round(tvaCollectee * 100) / 100}`,
+    ``,
+    ...achats.map((f) => {
+      const ht = Math.round(Number(f.montant_ht || 0) * 100) / 100;
+      const tva = Math.round(Number(f.tva || 0) * 100) / 100;
+      const taux = ht ? Math.round((tva / ht) * 10000) / 100 : 20;
+      return `Achat - ${f.fournisseur || "Fournisseur"};${ht};${taux};${tva}`;
+    }),
+    ``,
+    `TOTAL TVA DEDUCTIBLE;;;${Math.round(tvaDeductible * 100) / 100}`,
+    ``,
+    `SOLDE TVA NET;;;${solde}`,
+    `(+ = a reverser DGI  /  - = credit TVA);;;`,
+  ];
+
+  const csv = lines.join("\r\n");
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=declaration_tva_${dossierId}.csv`);
+  res.send("﻿" + csv);
+});
+
 app.get("/", (req, res) => res.json({ message: "FinDoc API is running", db: !!PYTHON && fs.existsSync(DB_PATH) }));
 
 const PORT = 8000;
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`INFO: FinDoc Node.js server -> http://127.0.0.1:${PORT}`);
+const HOST = process.env.HOST || "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  console.log(`INFO: FinDoc Node.js server -> http://${HOST}:${PORT}`);
   console.log(`INFO: SQLite via Python: ${PYTHON ? "OK" : "fallback in-memory"}`);
 });

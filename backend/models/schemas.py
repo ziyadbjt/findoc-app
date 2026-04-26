@@ -89,3 +89,31 @@ class TeamMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Relance(Base):
+    __tablename__ = "relances"
+    id = Column(Integer, primary_key=True, index=True)
+    facture_id = Column(Integer, ForeignKey("factures.id"), index=True)
+    niveau = Column(Integer, default=1)
+    destinataire_email = Column(String)
+    destinataire_nom = Column(String, nullable=True)
+    sujet = Column(String)
+    corps = Column(Text)
+    envoye = Column(Integer, default=0)
+    envoye_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_email = Column(String, nullable=True)
+    action = Column(String)
+    ressource = Column(String, nullable=True)
+    ressource_id = Column(Integer, nullable=True)
+    details = Column(Text, nullable=True)
+    ip = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

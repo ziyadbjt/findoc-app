@@ -216,15 +216,100 @@ def _fallback_chat_answer(message: str, context: dict[str, Any]) -> str:
     )
 
 
+def _handle_slash_command(message: str, context: dict[str, Any]) -> str | None:
+    """Handle /relance, /tva, /export slash commands directly without calling Claude."""
+    stripped = message.strip()
+    factures = context.get("factures") or []
+    stats = context.get("stats") or {}
+
+    if stripped.startswith("/relance"):
+        parts = stripped.split(maxsplit=1)
+        query = parts[1].strip().upper() if len(parts) > 1 else ""
+        matches = [f for f in factures if f.get("paiement") == "en_retard" and (not query or query in (f.get("fournisseur") or "").upper())]
+        if not matches:
+            target = query or "tous les fournisseurs"
+            return f"Aucune facture en retard trouvée pour {target}."
+        lines = [f"Relance — {len(matches)} facture(s) en retard :\n"]
+        total = sum(float(f.get("montant_ttc") or 0) for f in matches)
+        for f in matches[:10]:
+            lines.append(f"• {f.get('fournisseur')} — {f.get('num_facture')} — {float(f.get('montant_ttc') or 0):.0f} MAD (échéance {f.get('date_echeance')})")
+        lines.append(f"\nTotal : {total:.0f} MAD")
+        lines.append("\nModèle d'email généré automatiquement par RelancesPage.")
+        return "\n".join(lines)
+
+    if stripped.startswith("/tva"):
+        tva_collectee = float(stats.get("tva_collectee") or 0)
+        tva_deductible = float(stats.get("tva_deductible") or 0)
+        solde = round(tva_collectee - tva_deductible, 2)
+        signe = "à reverser à la DGI" if solde > 0 else "crédit de TVA"
+        return (
+            f"**Situation TVA du dossier**\n\n"
+            f"• TVA collectée (ventes) : {tva_collectee:.2f} MAD\n"
+            f"• TVA déductible (achats) : {tva_deductible:.2f} MAD\n"
+            f"• Solde net : **{abs(solde):.2f} MAD {signe}**"
+        )
+
+    if stripped.startswith("/anomalies"):
+        retards = [f for f in factures if f.get("paiement") == "en_retard"]
+        penalites = float(stats.get("penalites_totales") or 0)
+        total = len(factures)
+        return (
+            f"**Anomalies détectées**\n\n"
+            f"• Factures en retard : {len(retards)} / {total}\n"
+            f"• Pénalités Loi 69-21 estimées : {penalites:.2f} MAD\n"
+            f"• Ouvrez l'onglet Anomalies pour le détail."
+        )
+
+    if stripped.startswith("/aide") or stripped.startswith("/help"):
+        return (
+            "**Commandes disponibles**\n\n"
+            "• `/relance [fournisseur]` — Liste les factures en retard et génère un résumé de relance\n"
+            "• `/tva` — Affiche le solde TVA du dossier\n"
+            "• `/anomalies` — Résumé des anomalies et retards détectés\n"
+            "• `/aide` — Affiche cette aide\n\n"
+            "Ou posez directement vos questions sur le dossier !"
+        )
+
+    return None
+
+
 def stream_chat_response(message: str, history: list[dict[str, str]], context: dict[str, Any]) -> Iterable[str]:
+    # Handle slash commands directly
+    slash_response = _handle_slash_command(message, context)
+    if slash_response:
+        for token in slash_response.split():
+            yield token + " "
+        return
+
     summary = build_chat_context_summary(context)
+    stats = context.get("stats") or {}
+    factures = context.get("factures") or []
+
+    # Build proactive alerts for system prompt
+    alerts = []
+    retard_count = int(stats.get("factures_en_retard") or 0)
+    if retard_count > 0:
+        alerts.append(f"ALERTE : {retard_count} facture(s) en retard, pénalités estimées à {float(stats.get('penalites_totales') or 0):.0f} MAD.")
+    tva_solde = float(stats.get("tva_collectee") or 0) - float(stats.get("tva_deductible") or 0)
+    if tva_solde > 10000:
+        alerts.append(f"TVA à reverser DGI : {tva_solde:.0f} MAD.")
+    low_confidence = [f for f in factures if f.get("confidence") is not None and float(f.get("confidence") or 1) < 0.8]
+    if low_confidence:
+        alerts.append(f"{len(low_confidence)} facture(s) avec confiance d'extraction < 80% — à valider.")
+
+    alerts_str = "\n".join(alerts) if alerts else "Aucune alerte active."
+
     system_prompt = (
-        "Tu es FinDoc, copilote comptable marocain. "
-        "Reponds en francais, de maniere concise et operationnelle. "
-        "Base-toi sur le plan comptable marocain, la Loi 69-21 sur les delais de paiement, "
-        "et les donnees du dossier ci-dessous. "
+        "Tu es FinDoc, copilote comptable marocain expert en Plan Comptable Marocain (PCM), "
+        "Loi 69-21 sur les délais de paiement, et fiscalité marocaine (TVA, IS, IR, RAS). "
+        "Réponds en français, de manière concise et opérationnelle. "
+        "Utilise des listes à puces et du Markdown pour la clarté. "
+        "Propose toujours une action concrète. "
         "Quand une information manque, dis-le clairement.\n\n"
-        f"{summary}"
+        f"=== CONTEXTE DU DOSSIER ===\n{summary}\n\n"
+        f"=== ALERTES ACTIVES ===\n{alerts_str}\n\n"
+        "=== COMMANDES DISPONIBLES ===\n"
+        "L'utilisateur peut taper /relance, /tva, /anomalies, /aide pour des réponses rapides."
     )
 
     if not os.getenv("ANTHROPIC_API_KEY"):

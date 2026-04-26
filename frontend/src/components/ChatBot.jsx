@@ -478,6 +478,21 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
           </div>
         )}
 
+        {mode === "ai" && messages.length <= 1 && (
+          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line-1)", display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {["/tva", "/relance", "/anomalies", "/aide"].map(cmd => (
+              <button
+                key={cmd}
+                className="chip"
+                style={{ fontSize: 11.5 }}
+                onClick={() => { setInput(cmd); }}
+              >
+                {cmd}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="chatbot-compose" style={{ padding: 14, borderTop: "1px solid var(--line-1)" }}>
           <div style={{ display: "flex", gap: 8 }}>
             <textarea
@@ -494,7 +509,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
               disabled={isPrivateMode && !selectedContact}
               placeholder={
                 mode === "ai"
-                  ? "Ex: Quelles factures sont en retard ?"
+                  ? "Posez une question ou tapez /aide pour les commandes"
                   : isProjectMode
                     ? "Ecrire dans le canal projet..."
                     : selectedContact

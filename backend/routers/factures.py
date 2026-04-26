@@ -1,8 +1,10 @@
 import io
 import os
+import re
 import shutil
+import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -44,6 +46,7 @@ class UploadFacturesResponse(BaseModel):
 )
 async def upload_factures(
     dossier_id: int,
+    request: Request,
     files: list[UploadFile] = File(..., description="Liste de fichiers PDF, PNG, JPG ou JPEG"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -54,7 +57,9 @@ async def upload_factures(
             results.append({"fichier": file.filename, "statut": "erreur"})
             continue
 
-        path = f"{UPLOAD_DIR}/{dossier_id}_{file.filename}"
+        safe_ext = os.path.splitext(file.filename or "")[-1].lower()
+        safe_name = f"{dossier_id}_{uuid.uuid4().hex}{safe_ext}"
+        path = os.path.join(UPLOAD_DIR, safe_name)
         with open(path, "wb") as handle:
             shutil.copyfileobj(file.file, handle)
 
@@ -106,6 +111,14 @@ async def upload_factures(
             }
         )
 
+    try:
+        from routers.admin import log_action
+        log_action(db, current_user.id, current_user.email, "upload_facture",
+                   "dossier", dossier_id, f"{len(files)} fichier(s) importé(s)",
+                   request.client.host if request.client else None)
+    except Exception:
+        pass
+
     return {"total": len(files), "resultats": results}
 
 
@@ -150,4 +163,84 @@ def export_journal(dossier_id: int, db: Session = Depends(get_db), current_user=
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=journal_dossier_{dossier_id}.xlsx"},
+    )
+
+
+@router.get(
+    "/{dossier_id}/export-dgi",
+    summary="Exporter la declaration TVA au format DGI",
+    description="Genere un fichier CSV compatible DGI pour la declaration TVA mensuelle.",
+)
+def export_dgi_tva(
+    dossier_id: int,
+    mois: int = 0,
+    annee: int = 0,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from datetime import datetime as _dt
+    import csv
+
+    factures_all = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
+
+    if mois and annee:
+        factures_all = [
+            f for f in factures_all
+            if f.date_facture and _dt.strptime(str(f.date_facture)[:7], "%Y-%m").month == mois
+            and _dt.strptime(str(f.date_facture)[:7], "%Y-%m").year == annee
+        ]
+    elif annee:
+        factures_all = [
+            f for f in factures_all
+            if f.date_facture and str(f.date_facture).startswith(str(annee))
+        ]
+
+    achats = [f for f in factures_all if (f.type or "achat") == "achat"]
+    ventes = [f for f in factures_all if f.type == "vente"]
+
+    tva_collectee = sum(float(f.tva or 0) for f in ventes)
+    tva_deductible = sum(float(f.tva or 0) for f in achats)
+    solde_tva = round(tva_collectee - tva_deductible, 2)
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+
+    writer.writerow(["=== DECLARATION TVA — Format DGI Maroc ==="])
+    writer.writerow(["Dossier ID", dossier_id])
+    writer.writerow(["Periode", f"{mois:02d}/{annee}" if mois and annee else str(annee or "Tous")])
+    writer.writerow(["Genere le", _dt.utcnow().strftime("%Y-%m-%d %H:%M")])
+    writer.writerow([])
+    writer.writerow(["RUBRIQUE", "BASE HT (MAD)", "TAUX TVA (%)", "TVA (MAD)"])
+
+    for f in ventes:
+        writer.writerow([
+            f"Vente - {f.fournisseur or 'Client'}",
+            round(float(f.montant_ht or 0), 2),
+            round((float(f.tva or 0) / float(f.montant_ht or 1)) * 100, 1) if f.montant_ht else 20,
+            round(float(f.tva or 0), 2),
+        ])
+
+    writer.writerow([])
+    writer.writerow(["TOTAL TVA COLLECTEE", "", "", round(tva_collectee, 2)])
+    writer.writerow([])
+
+    for f in achats:
+        writer.writerow([
+            f"Achat - {f.fournisseur or 'Fournisseur'}",
+            round(float(f.montant_ht or 0), 2),
+            round((float(f.tva or 0) / float(f.montant_ht or 1)) * 100, 1) if f.montant_ht else 20,
+            round(float(f.tva or 0), 2),
+        ])
+
+    writer.writerow([])
+    writer.writerow(["TOTAL TVA DEDUCTIBLE", "", "", round(tva_deductible, 2)])
+    writer.writerow([])
+    writer.writerow(["SOLDE TVA NET", "", "", solde_tva])
+    writer.writerow(["(+ = a reverser DGI  /  - = credit TVA)", "", "", ""])
+
+    content = output.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=declaration_tva_{dossier_id}.csv"},
     )

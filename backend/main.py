@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models import schemas
 from models.database import engine
-from routers import admin, auth, chat, dossiers, factures, learning, reconciliation
+from routers import admin, auth, chat, dossiers, factures, learning, reconciliation, relances
 
 
 schemas.Base.metadata.create_all(bind=engine)
@@ -65,6 +65,7 @@ app.include_router(reconciliation.router)
 app.include_router(chat.router)
 app.include_router(learning.router)
 app.include_router(admin.router)
+app.include_router(relances.router)
 
 
 @app.get(

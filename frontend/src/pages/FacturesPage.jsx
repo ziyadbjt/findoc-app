@@ -508,6 +508,11 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   };
 
   const totalTTC = filtered.reduce((sum, facture) => sum + (facture.montant_ttc || 0), 0);
+  const lowConfidenceFactures = useMemo(
+    () => factures.filter(f => f.confidence != null && f.confidence < 0.8 && f.statut !== "erreur"),
+    [factures]
+  );
+  const [showBatchValidation, setShowBatchValidation] = useState(false);
 
   return (
     <div className="page-inner">
@@ -521,6 +526,59 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
           <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={13} /> Importer</button>
         </div>
       </div>
+
+      {lowConfidenceFactures.length > 0 && (
+        <div style={{
+          background: "var(--warn-bg)", borderRadius: 10, padding: "12px 16px",
+          marginBottom: 14, display: "flex", alignItems: "center", gap: 12,
+          border: "1px solid color-mix(in srgb, var(--warn-ink) 25%, transparent)"
+        }}>
+          <Sparkles size={15} style={{ color: "var(--warn-ink)", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--warn-ink)" }}>
+              {lowConfidenceFactures.length} facture{lowConfidenceFactures.length > 1 ? "s" : ""} à valider
+            </span>
+            <span style={{ fontSize: 12, color: "var(--ink-2)", marginLeft: 8 }}>
+              Confiance d'extraction &lt; 80% — vérifiez les montants extraits
+            </span>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 12 }}
+            onClick={() => setShowBatchValidation(v => !v)}
+          >
+            {showBatchValidation ? "Masquer" : "Voir toutes"}
+          </button>
+        </div>
+      )}
+
+      {showBatchValidation && lowConfidenceFactures.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", fontSize: 12.5, fontWeight: 500 }}>
+            Factures à confiance faible
+          </div>
+          {lowConfidenceFactures.map(f => (
+            <div key={f.id}
+              style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+              onClick={() => setSelected(f)}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{f.fournisseur || "—"}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{f.num_facture} · {formatDate(f.date_facture)}</div>
+              </div>
+              <div className="mono tabular" style={{ fontSize: 13, fontWeight: 600 }}>{formatMAD(f.montant_ttc).split(",")[0]}</div>
+              <span style={{
+                fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 600,
+                background: "var(--warn-bg)", color: "var(--warn-ink)",
+                border: "1px solid color-mix(in srgb, var(--warn-ink) 20%, transparent)"
+              }}>
+                {Math.round((f.confidence || 0) * 100)}% confiance
+              </span>
+              <ChevronRight size={14} style={{ color: "var(--ink-3)" }} />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--line-0)", paddingBottom: 0 }}>
         {TABS.map((tabItem) => (

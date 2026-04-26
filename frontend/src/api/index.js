@@ -1,6 +1,11 @@
 import axios from "axios";
 
-const BASE = "http://127.0.0.1:8000";
+const API_HOST =
+  typeof window !== "undefined" && window.location.hostname
+    ? window.location.hostname
+    : "127.0.0.1";
+
+const BASE = `http://${API_HOST}:8000`;
 
 const auth = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 
@@ -130,6 +135,19 @@ export const createAdminUser = (token, payload) =>
 
 export const updateAdminUser = (token, id, payload) =>
   axios.patch(`${BASE}/admin/users/${id}`, payload, auth(token));
+
+export const sendRelance = (token, payload) =>
+  axios.post(`${BASE}/relances/send`, payload, auth(token));
+
+export const getRelances = (token, dossierId) =>
+  axios.get(`${BASE}/relances/${dossierId}`, auth(token));
+
+export const exportDgiTva = (token, dossierId, mois = 0, annee = 0) =>
+  axios.get(`${BASE}/factures/${dossierId}/export-dgi`, {
+    ...auth(token),
+    params: { mois, annee },
+    responseType: "blob",
+  });
 
 export const recordCorrection = (token, payload) =>
   axios.post(`${BASE}/learning/correction`, payload, auth(token));
