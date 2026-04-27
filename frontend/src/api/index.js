@@ -5,7 +5,9 @@ const API_HOST =
     ? window.location.hostname
     : "127.0.0.1";
 
-const BASE = `http://${API_HOST}:8000`;
+const BASE =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+  `http://${API_HOST}:8000`;
 
 const auth = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 
