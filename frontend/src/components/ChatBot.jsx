@@ -304,7 +304,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
           position: "fixed",
           right: 24,
           bottom: 24,
-          zIndex: 79,
+          zIndex: 45,
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -341,7 +341,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
       {mounted && (
         <div
           className={`chatbot-shell ${visible ? "is-open" : "is-closing"}`}
-          style={{ position: "fixed", right: 24, bottom: 24, width: 420, maxWidth: "calc(100vw - 24px)", zIndex: 80 }}
+          style={{ position: "fixed", right: 24, bottom: 24, width: 420, maxWidth: "calc(100vw - 24px)", zIndex: 46 }}
         >
           <div className="card chatbot-card" style={{ padding: 0, overflow: "hidden", boxShadow: "0 24px 80px rgba(20, 20, 20, 0.18)" }}>
         <div className="chatbot-head" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-1)" }}>

@@ -4,7 +4,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
-  getDossier, getFactures, getEcritures, exportJournal, MOCK_NOTIFICATIONS,
+  getDossier, getFactures, getEcritures, exportJournal, MOCK_NOTIFICATIONS, updateDossier,
 } from "../api";
 import { enrichDossier, enrichFacture } from "../utils/format";
 import { Sidebar, Topbar, CmdK, NotificationsPanel } from "../components/Shell";
@@ -47,6 +47,7 @@ export default function Dashboard() {
   const toast = useToast();
 
   const [dossier, setDossier] = useState(null);
+  const [currentExercise, setCurrentExercise] = useState(() => Number(localStorage.getItem(`findoc:exercise:${id}`)) || new Date().getFullYear());
   const [factures, setFactures] = useState([]);
   const [ecritures, setEcritures] = useState([]);
   const [route, setRoute] = useState(() => searchParams.get("tab") || "overview");
@@ -103,6 +104,8 @@ export default function Dashboard() {
         getEcritures(token, id),
       ]);
       setDossier(enrichDossier(dosRes.data));
+      const dossierExercise = dosRes.data.exercice_courant || Number(localStorage.getItem(`findoc:exercise:${id}`)) || new Date().getFullYear();
+      setCurrentExercise(dossierExercise);
       setFactures(facRes.data.map(enrichFacture));
       setEcritures(ecrRes.data || []);
     } catch {
@@ -240,6 +243,18 @@ export default function Dashboard() {
 
   const handleSwitchDossier = () => navigate("/dossiers");
 
+  const handleChangeExercise = async (year) => {
+    setCurrentExercise(year);
+    localStorage.setItem(`findoc:exercise:${id}`, String(year));
+    try {
+      const response = await updateDossier(token, id, { exercice_courant: year });
+      setDossier(enrichDossier(response.data));
+      toast(`Exercice ${year} sélectionné`, "pos");
+    } catch {
+      toast("Exercice non sauvegardé", "neg");
+    }
+  };
+
   const handleExport = async () => {
     try {
       const res = await exportJournal(token, id);
@@ -266,7 +281,7 @@ export default function Dashboard() {
     ? [dossier.raison_sociale, ...(CRUMBS[route] || ["Dossier"]).slice(1)]
     : CRUMBS[route] || ["Dossier"];
 
-  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user };
+  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user, currentExercise };
 
   return (
     <div className="app-topnav" data-density={density}>
@@ -283,6 +298,8 @@ export default function Dashboard() {
         onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
         theme={theme}
         hasNotifs={MOCK_NOTIFICATIONS.length > 0}
+        currentExercise={currentExercise}
+        onChangeExercise={handleChangeExercise}
       />
 
       <main
@@ -318,7 +335,7 @@ export default function Dashboard() {
           {!loadingData && route === "relances" && <RelancesPage {...pageProps} />}
           {!loadingData && route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
           {!loadingData && route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
-          {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
+          {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />}
           {!loadingData && route === "audit" && <AuditPage dossier={dossier} user={user} />}
           {!loadingData && route === "anomalies" && <AnomaliesPage factures={factures} />}
           {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}

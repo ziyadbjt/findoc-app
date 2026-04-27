@@ -41,7 +41,7 @@ export function DossierAvatar({ dossier, size = 28 }) {
 
 export function Sidebar() { return null; }
 
-export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs }) {
+export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs, currentExercise, onChangeExercise }) {
   const nav = [
     { key: "overview",       label: "Aperçu",          icon: <Home size={14} /> },
     { key: "factures",       label: "Factures",         icon: <FileText size={14} />, badge: counts?.factures },
@@ -72,6 +72,14 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
         </span>
         <ChevronsUpDown size={13} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
       </button>
+      <label className="topnav-exercise">
+        <span>Exercice</span>
+        <select value={currentExercise || new Date().getFullYear()} onChange={(event) => onChangeExercise?.(Number(event.target.value))}>
+          {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() + 2 - index).map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+      </label>
 
       {/* Nav links */}
       <nav className="topnav-links">

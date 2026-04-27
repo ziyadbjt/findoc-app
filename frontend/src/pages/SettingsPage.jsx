@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, RefreshCw, Sparkles, Database, Building2, Upload, Plus, Trash2, Pencil, X, Search, Brain, CheckCircle, AlertCircle } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useToast } from "../context/ToastContext";
-import { createAdminUser, getAdminUsers, getCorrections, getRagStatus, updateAdminUser } from "../api";
+import { createAdminUser, getAdminUsers, getCorrections, getPCM, getRagStatus, replacePCM, updateAdminUser } from "../api";
 import { useAuth } from "../context/AuthContext";
 
 const INTEGRATIONS = [
@@ -56,8 +57,39 @@ function savePCM(data) {
 const CLASSES = ["Toutes", "1", "2", "3", "4", "5", "6", "7"];
 const CLASS_LABELS = { "1": "Comptes de financement permanent", "2": "Comptes d'actif immobilisé", "3": "Comptes d'actif circulant", "4": "Comptes de passif circulant", "5": "Comptes de trésorerie", "6": "Comptes de charges", "7": "Comptes de produits" };
 
-function PCMSection({ toast }) {
+const normaliseHeader = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const firstValue = (row, names, fallbackIndex) => {
+  for (const name of names) {
+    if (row[name] != null && String(row[name]).trim()) return row[name];
+  }
+  const values = Object.values(row);
+  return values[fallbackIndex];
+};
+
+const normalisePCMRows = (rows) =>
+  rows
+    .map((row) => {
+      const normalised = {};
+      Object.entries(row).forEach(([key, value]) => {
+        normalised[normaliseHeader(key)] = value;
+      });
+      const compte = String(firstValue(normalised, ["compte", "numero", "n compte", "n° compte", "code"], 0) || "").trim();
+      const libelle = String(firstValue(normalised, ["libelle", "intitule", "intitule du compte", "nom"], 1) || "").trim();
+      const classe = String(firstValue(normalised, ["classe"], 2) || compte.charAt(0) || "").trim();
+      return { compte, libelle, classe: classe || compte.charAt(0) };
+    })
+    .filter((row) => row.compte && row.libelle);
+
+function PCMSection({ toast, dossier }) {
+  const { token } = useAuth();
   const [comptes, setComptes] = useState(loadPCM);
+  const [loadingPCM, setLoadingPCM] = useState(false);
   const [q, setQ] = useState("");
   const [classeFilter, setClasseFilter] = useState("Toutes");
   const [editing, setEditing] = useState(null); // { index, compte, libelle, classe } or "new"
@@ -73,7 +105,48 @@ function PCMSection({ toast }) {
     return true;
   }).sort((a, b) => a.compte.localeCompare(b.compte));
 
-  const persist = (next) => { setComptes(next); savePCM(next); };
+  const persist = async (next) => {
+    setComptes(next);
+    savePCM(next);
+    if (!token || !dossier?.id) return;
+    try {
+      const res = await replacePCM(token, dossier.id, next);
+      setComptes(res.data || next);
+      savePCM(res.data || next);
+    } catch {
+      toast("PCM sauvegarde localement, sync backend impossible", "neg");
+    }
+  };
+
+  useEffect(() => {
+    if (!token || !dossier?.id) return;
+    let ignore = false;
+    const load = async () => {
+      setLoadingPCM(true);
+      try {
+        const res = await getPCM(token, dossier.id);
+        if (ignore) return;
+        const serverRows = res.data || [];
+        if (serverRows.length) {
+          setComptes(serverRows);
+          savePCM(serverRows);
+        } else {
+          const localRows = loadPCM();
+          const seeded = await replacePCM(token, dossier.id, localRows);
+          if (!ignore) {
+            setComptes(seeded.data || localRows);
+            savePCM(seeded.data || localRows);
+          }
+        }
+      } catch {
+        if (!ignore) toast("Chargement PCM backend impossible", "neg");
+      } finally {
+        if (!ignore) setLoadingPCM(false);
+      }
+    };
+    load();
+    return () => { ignore = true; };
+  }, [token, dossier?.id]);
 
   const startNew = () => {
     setForm({ compte: "", libelle: "", classe: "4" });
@@ -113,20 +186,31 @@ function PCMSection({ toast }) {
   const handleImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isExcel = /\.(xls|xlsx)$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const text = ev.target.result;
         let parsed;
-        if (file.name.endsWith(".json")) {
-          parsed = JSON.parse(text);
+        if (isExcel) {
+          const workbook = XLSX.read(ev.target.result, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+          parsed = normalisePCMRows(rows);
         } else {
-          // CSV: compte;libelle;classe or compte,libelle,classe
-          const sep = text.includes(";") ? ";" : ",";
-          parsed = text.trim().split("\n").slice(1).map(line => {
-            const [compte, libelle, classe] = line.split(sep);
-            return { compte: (compte || "").trim(), libelle: (libelle || "").trim(), classe: (classe || "").trim() };
-          }).filter(c => c.compte && c.libelle);
+          const text = ev.target.result;
+          if (file.name.toLowerCase().endsWith(".json")) {
+            parsed = JSON.parse(text);
+          } else {
+            // CSV: compte;libelle;classe or compte,libelle,classe
+            const sep = text.includes(";") ? ";" : ",";
+            const lines = text.trim().split(/\r?\n/);
+            const headers = lines[0]?.split(sep).map(normaliseHeader) || [];
+            const rows = lines.slice(1).map((line) => {
+              const values = line.split(sep);
+              return Object.fromEntries(headers.map((header, index) => [header || `col_${index}`, values[index] || ""]));
+            });
+            parsed = normalisePCMRows(rows);
+          }
         }
         if (!Array.isArray(parsed) || !parsed[0]?.compte) throw new Error();
         const merged = [...comptes];
@@ -137,10 +221,11 @@ function PCMSection({ toast }) {
         persist(merged);
         toast(`${parsed.length} comptes importés`, "pos");
       } catch {
-        toast("Format invalide. Attendu: JSON ou CSV (compte;libelle;classe)", "neg");
+        toast("Format invalide. Attendu: Excel, JSON ou CSV avec compte/libellé/classe", "neg");
       }
     };
-    reader.readAsText(file);
+    if (isExcel) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
     e.target.value = "";
   };
 
@@ -154,13 +239,15 @@ function PCMSection({ toast }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
           <div className="card-title">Plan Comptable Marocain</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>{comptes.length} comptes · modifiable directement</div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>
+            {comptes.length} comptes · {loadingPCM ? "synchronisation…" : "utilises par l'IA"}
+          </div>
         </div>
         <button className="btn" onClick={handleReset} style={{ fontSize: 12 }}>Réinitialiser</button>
         <button className="btn" onClick={() => importRef.current?.click()}>
-          <Upload size={13} /> Importer CSV / JSON
+          <Upload size={13} /> Importer Excel / CSV
         </button>
-        <input ref={importRef} type="file" accept=".csv,.json" hidden onChange={handleImport} />
+        <input ref={importRef} type="file" accept=".xls,.xlsx,.csv,.json" hidden onChange={handleImport} />
         <button className="btn btn-primary" onClick={startNew}>
           <Plus size={13} /> Ajouter un compte
         </button>
@@ -707,7 +794,7 @@ export default function SettingsPage({ dossier, onUpdateDossier }) {
 
       {tab === "acces" && <AccessTab />}
 
-      {tab === "pcm" && <PCMSection toast={toast} />}
+      {tab === "pcm" && <PCMSection toast={toast} dossier={dossier} />}
 
       {tab === "finai" && <FinAITab dossier={dossier} />}
 

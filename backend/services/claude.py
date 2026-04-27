@@ -58,6 +58,72 @@ def _default_pcm(line_items: list[dict[str, Any]], fournisseur: str, code_tiers:
     return "6111000"
 
 
+def _load_pcm_options(dossier_id: int | None) -> list[dict[str, str]]:
+    if not dossier_id:
+        return []
+    try:
+        from models.database import SessionLocal
+        from models.schemas import PCMCompte
+
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(PCMCompte)
+                .filter(PCMCompte.dossier_id == dossier_id)
+                .order_by(PCMCompte.compte.asc())
+                .all()
+            )
+            return [
+                {"compte": row.compte, "libelle": row.libelle, "classe": row.classe or (row.compte or "")[:1]}
+                for row in rows
+            ]
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("PCM load failed")
+        return []
+
+
+def _score_pcm_option(option: dict[str, str], haystack: str, code_tiers: str) -> int:
+    compte = option.get("compte", "")
+    libelle = option.get("libelle", "").lower()
+    score = 0
+    if code_tiers.startswith("CL") and compte.startswith("7"):
+        score += 8
+    if not code_tiers.startswith("CL") and compte.startswith("6"):
+        score += 6
+    for token in re.findall(r"[a-z0-9]{4,}", libelle):
+        if token in haystack:
+            score += 3
+    keyword_map = (
+        (("carbur", "gasoil", "essence"), ("carbur", "transport", "deplacement")),
+        (("loyer", "location", "locat"), ("loyer", "location")),
+        (("assurance", "prime"), ("assurance",)),
+        (("honoraire", "consult", "service", "prestation"), ("honoraire", "service", "prestation")),
+        (("informat", "logiciel", "digital", "internet", "telecom"), ("informat", "logiciel", "telecom", "internet")),
+        (("marchandise", "achat", "matiere", "stock"), ("marchandise", "achat", "matiere", "stock")),
+        (("vente", "produit", "service"), ("vente", "produit", "service")),
+    )
+    for source_tokens, label_tokens in keyword_map:
+        if any(token in haystack for token in source_tokens) and any(token in libelle for token in label_tokens):
+            score += 5
+    return score
+
+
+def _choose_pcm_from_options(
+    options: list[dict[str, str]],
+    line_items: list[dict[str, Any]],
+    fournisseur: str,
+    code_tiers: str,
+) -> str | None:
+    if not options:
+        return None
+    haystack = f"{fournisseur} {' '.join(str(item.get('description', '')) for item in line_items)}".lower()
+    ranked = sorted(options, key=lambda option: _score_pcm_option(option, haystack, code_tiers), reverse=True)
+    best = ranked[0] if ranked else None
+    return best.get("compte") if best else None
+
+
 def enrich_facture_metier(invoice_data: dict[str, Any], dossier_id: int | None = None) -> dict[str, Any]:
     fournisseur = invoice_data.get("fournisseur") or "Fournisseur inconnu"
     line_items = invoice_data.get("line_items") or []
@@ -66,7 +132,8 @@ def enrich_facture_metier(invoice_data: dict[str, Any], dossier_id: int | None =
 
     code_prefix = _classify_tiers(fournisseur, texte_source)
     code_tiers = f"{code_prefix}{_slug(fournisseur)}"
-    compte_pcm = _default_pcm(line_items, fournisseur, code_tiers)
+    pcm_options = _load_pcm_options(dossier_id)
+    compte_pcm = _choose_pcm_from_options(pcm_options, line_items, fournisseur, code_tiers) or _default_pcm(line_items, fournisseur, code_tiers)
     ras = round(montant_ht * 0.10, 2) if code_tiers.startswith("FE") else 0.0
 
     base_response = {
@@ -89,6 +156,11 @@ def enrich_facture_metier(invoice_data: dict[str, Any], dossier_id: int | None =
     except Exception:
         pass
 
+    pcm_context = "\n".join(
+        f"- {row['compte']} | {row['libelle']} | classe {row.get('classe') or ''}"
+        for row in pcm_options[:120]
+    )
+
     prompt = f"""
 Tu es un assistant comptable marocain.
 Tu dois enrichir des donnees OCR de facture et retourner uniquement un JSON valide:
@@ -104,7 +176,9 @@ Regles:
 - FE = fournisseur etranger
 - CL = client
 - Si FE, appliquer RAS de 10% du montant HT
-- Choisir un compte PCM plausible
+- Choisir le compte PCM uniquement dans la liste fournie si elle existe.
+- Si aucun compte de la liste ne correspond, utiliser le compte le plus proche et baisser confiance_metier.
+{f"{chr(10)}Plan comptable autorise:{chr(10)}{pcm_context}" if pcm_context else ""}
 {f"{chr(10)}{rag_context}" if rag_context else ""}
 Donnees OCR:
 {json.dumps({
@@ -123,9 +197,12 @@ Donnees OCR:
             messages=[{"role": "user", "content": prompt}],
         )
         parsed = json.loads(message.content[0].text.strip())
+        parsed_compte = str(parsed.get("compte_pcm") or "")
+        if pcm_options and parsed_compte not in {row["compte"] for row in pcm_options}:
+            parsed_compte = base_response["compte_pcm"]
         return {
             "code_tiers": parsed.get("code_tiers") or base_response["code_tiers"],
-            "compte_pcm": parsed.get("compte_pcm") or base_response["compte_pcm"],
+            "compte_pcm": parsed_compte or base_response["compte_pcm"],
             "ras": round(float(parsed.get("ras") or base_response["ras"]), 2),
             "confiance_metier": round(float(parsed.get("confiance_metier") or base_response["confiance_metier"]), 3),
             "classification": (parsed.get("code_tiers") or base_response["code_tiers"])[:2],
@@ -165,6 +242,105 @@ def generer_ecritures(facture_data: dict[str, Any]) -> list[dict[str, Any]]:
 
     ecritures.append({"compte_pcm": "401100", "libelle": fournisseur, "debit": 0, "credit": fournisseur_credit})
     return ecritures
+
+
+def _extract_years(text: str) -> list[int]:
+    current_year = datetime.utcnow().year
+    years = []
+    for match in re.findall(r"\b(20\d{2})\b", text or ""):
+        year = int(match)
+        if 2000 <= year <= current_year + 5:
+            years.append(year)
+    return sorted(set(years))
+
+
+def analyser_rattachement_exercice(invoice_data: dict[str, Any]) -> dict[str, Any]:
+    date_facture = str(invoice_data.get("date_facture") or "")
+    facture_year = int(date_facture[:4]) if re.match(r"^\d{4}", date_facture) else datetime.utcnow().year
+    type_document = invoice_data.get("type") or "achat"
+    text_parts = [
+        str(invoice_data.get("nom_fichier") or ""),
+        str(invoice_data.get("texte_source") or ""),
+        str(invoice_data.get("ocr_payload") or ""),
+        " ".join(str(item.get("description", "")) for item in invoice_data.get("line_items") or []),
+    ]
+    haystack = "\n".join(text_parts)
+    candidate_years = [year for year in _extract_years(haystack) if year != facture_year]
+    suggested_year = candidate_years[0] if candidate_years else facture_year
+
+    if suggested_year > facture_year:
+        traitement = "produit_constate_avance" if type_document == "vente" else "charge_constatee_avance"
+        risk = "eleve"
+        reason = f"Facture datee {facture_year}, mais le libelle/source mentionne {suggested_year}."
+    elif suggested_year < facture_year:
+        traitement = "rattachement_exercice_precedent"
+        risk = "moyen"
+        reason = f"Facture datee {facture_year}, mais le libelle/source mentionne {suggested_year}."
+    else:
+        traitement = "exercice_courant"
+        risk = "faible"
+        reason = "Aucun indice de rattachement a un autre exercice detecte."
+
+    fallback = {
+        "exercice_rattachement": suggested_year,
+        "traitement_comptable": traitement,
+        "niveau_risque": risk,
+        "commentaire": reason,
+    }
+
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return fallback
+
+    prompt = f"""
+Tu es un expert-comptable marocain. Analyse le rattachement d'exercice de cette facture.
+Retourne uniquement un JSON valide:
+{{
+  "exercice_rattachement": 2026,
+  "traitement_comptable": "exercice_courant|charge_constatee_avance|produit_constate_avance|rattachement_exercice_precedent|a_verifier",
+  "niveau_risque": "faible|moyen|eleve",
+  "commentaire": "raison courte"
+}}
+
+Regles:
+- Si la facture est datee N mais le libelle mentionne une prestation N+1, proposer charge/produit constate d'avance.
+- Si la facture est datee N mais concerne N-1, proposer rattachement exercice precedent.
+- Si les indices sont insuffisants, garder exercice courant ou a_verifier.
+
+Donnees:
+{json.dumps({
+    "date_facture": invoice_data.get("date_facture"),
+    "type": type_document,
+    "fournisseur": invoice_data.get("fournisseur"),
+    "num_facture": invoice_data.get("num_facture"),
+    "line_items": invoice_data.get("line_items", [])[:20],
+    "texte_source": str(invoice_data.get("texte_source") or "")[:3000],
+    "fallback_python": fallback,
+}, ensure_ascii=True)}
+""".strip()
+
+    try:
+        message = _get_client().messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=320,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        exercice = int(parsed.get("exercice_rattachement") or fallback["exercice_rattachement"])
+        if exercice < 2000 or exercice > datetime.utcnow().year + 5:
+            exercice = fallback["exercice_rattachement"]
+        return {
+            "exercice_rattachement": exercice,
+            "traitement_comptable": parsed.get("traitement_comptable") or fallback["traitement_comptable"],
+            "niveau_risque": parsed.get("niveau_risque") or fallback["niveau_risque"],
+            "commentaire": parsed.get("commentaire") or fallback["commentaire"],
+        }
+    except Exception:
+        logger.exception("Claude exercice analysis failed; using Python fallback")
+        return fallback
 
 
 def build_chat_context_summary(context: dict[str, Any]) -> str:

@@ -22,12 +22,26 @@ _NEW_COLS = [
     ("email_societe", "TEXT"),
     ("site_web", "TEXT"),
     ("logo_hue", "INTEGER"),
+    ("exercice_courant", "INTEGER"),
+]
+_FACTURE_NEW_COLS = [
+    ("stored_filename", "TEXT"),
+    ("exercice_rattachement", "INTEGER"),
+    ("traitement_comptable", "TEXT"),
+    ("analyse_ai", "TEXT"),
+    ("validation_status", "TEXT"),
+    ("texte_source", "TEXT"),
+    ("ocr_payload", "TEXT"),
 ]
 with sqlite3.connect(_DB_PATH) as connection:
     existing = {row[1] for row in connection.execute("PRAGMA table_info(dossiers)")}
     for col, typ in _NEW_COLS:
         if col not in existing:
             connection.execute(f"ALTER TABLE dossiers ADD COLUMN {col} {typ}")
+    facture_existing = {row[1] for row in connection.execute("PRAGMA table_info(factures)")}
+    for col, typ in _FACTURE_NEW_COLS:
+        if col not in facture_existing:
+            connection.execute(f"ALTER TABLE factures ADD COLUMN {col} {typ}")
 
 app = FastAPI(
     title="FinDoc Backend API",

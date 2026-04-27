@@ -488,7 +488,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const handleDrop = useCallback((event) => {
     event.preventDefault();
     setDragging(false);
-    setUploadFiles([...event.dataTransfer.files].filter((file) => file.type === "application/pdf"));
+    setUploadFiles([...event.dataTransfer.files].filter((file) => file.type === "application/pdf" || file.type.startsWith("image/")));
   }, []);
 
   const handleUpload = async () => {
@@ -636,6 +636,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                     <Th col="num_facture">Numero Facture</Th>
                     <Th col="date_facture">Date</Th>
                     <Th col="date_echeance">Echeance</Th>
+                    <Th col="exercice_rattachement">Exercice</Th>
                     <Th col="code_tiers">Code tiers</Th>
                     <Th col="montant_ht" right>HT</Th>
                     <Th col="tva" right>TVA</Th>
@@ -645,13 +646,16 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--ink-3)", fontSize: 13 }}>Aucune facture</td></tr>}
+                  {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--ink-3)", fontSize: 13 }}>Aucune facture</td></tr>}
                   {filtered.map((facture) => (
                     <tr key={facture.id} className="tr-hover" onClick={() => setSelected(facture)} style={{ cursor: "pointer" }}>
                       <td className="td" style={{ fontWeight: 500 }}>{facture.fournisseur || "-"}</td>
                       <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{facture.num_facture || "-"}</td>
                       <td className="td">{formatDateShort(facture.date_facture)}</td>
                       <td className="td" style={{ color: facture.paiement === "en_retard" ? "var(--neg-ink)" : undefined }}>{formatDateShort(facture.date_echeance)}</td>
+                      <td className="td mono" style={{ fontSize: 11, color: facture.traitement_comptable && facture.traitement_comptable !== "exercice_courant" ? "var(--warn-ink)" : "var(--ink-2)" }}>
+                        {facture.exercice_rattachement || (facture.date_facture || "").slice(0, 4) || "-"}
+                      </td>
                       <td className="td mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{facture.code_tiers || "-"}</td>
                       <td className="td right tabular">{formatMAD(facture.montant_ht).split(",")[0]}</td>
                       <td className="td right tabular" style={{ color: "var(--ink-2)" }}>{formatMAD(facture.tva).split(",")[0]}</td>
@@ -664,7 +668,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                 {filtered.length > 0 && (
                   <tfoot>
                     <tr style={{ borderTop: "1px solid var(--line-1)", background: "var(--bg-inset)" }}>
-                      <td colSpan={5} className="td" style={{ fontWeight: 500, fontSize: 12 }}>Total · {filtered.length} factures</td>
+                      <td colSpan={6} className="td" style={{ fontWeight: 500, fontSize: 12 }}>Total · {filtered.length} factures</td>
                       <td className="td right tabular" style={{ fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.montant_ht || 0), 0)).split(",")[0]}</td>
                       <td className="td right tabular" style={{ color: "var(--ink-2)", fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.tva || 0), 0)).split(",")[0]}</td>
                       <td className="td right tabular" style={{ fontWeight: 600 }}>{formatMAD(totalTTC).split(",")[0]}</td>
@@ -689,9 +693,9 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
             <div className="modal-body">
               <div className={`dropzone${dragging ? " drag-over" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
                 <div className="dropzone-icon"><Upload size={20} /></div>
-                <div className="dropzone-title">Glissez vos PDFs ici</div>
-                <div className="dropzone-sub">ou cliquez · PDF uniquement</div>
-                <input ref={fileRef} type="file" multiple accept=".pdf" style={{ display: "none" }} onChange={(event) => setUploadFiles([...event.target.files])} />
+                <div className="dropzone-title">Glissez vos factures ici</div>
+                <div className="dropzone-sub">PDF, PNG ou JPG · analyse Claude Vision</div>
+                <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: "none" }} onChange={(event) => setUploadFiles([...event.target.files])} />
               </div>
               {uploadFiles.length > 0 && (
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -726,7 +730,16 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       />
 
       {selected && (
-        <FactureDetail facture={selected} ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)} onClose={() => setSelected(null)} onUpdate={() => { setSelected(null); onRefresh(); }} dossierId={dossierId} />
+        <FactureDetail
+          facture={selected}
+          ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)}
+          onClose={() => setSelected(null)}
+          onUpdate={(next) => {
+            setSelected(next);
+            onRefresh();
+          }}
+          dossierId={dossierId}
+        />
       )}
     </div>
   );

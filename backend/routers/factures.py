@@ -4,15 +4,15 @@ import re
 import shutil
 import uuid
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import get_db
 from models.schemas import Dossier, Ecriture, Facture
 from routers.auth import get_current_user
-from services.claude import generer_ecritures, generate_monthly_report
+from services.claude import analyser_rattachement_exercice, generer_ecritures, generate_monthly_report
 from services.document_ai import extract_facture
 from services.export import build_export_workbook
 
@@ -20,6 +20,14 @@ router = APIRouter(prefix="/factures", tags=["Factures"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _facture_exercice(facture: Facture) -> int | None:
+    if facture.exercice_rattachement:
+        return int(facture.exercice_rattachement)
+    if facture.date_facture and re.match(r"^\d{4}", str(facture.date_facture)):
+        return int(str(facture.date_facture)[:4])
+    return None
 
 
 class UploadFactureItem(BaseModel):
@@ -36,6 +44,26 @@ class UploadFactureItem(BaseModel):
 class UploadFacturesResponse(BaseModel):
     total: int
     resultats: list[UploadFactureItem]
+
+
+class FactureUpdate(BaseModel):
+    fournisseur: str | None = None
+    code_tiers: str | None = None
+    num_facture: str | None = None
+    date_facture: str | None = None
+    date_echeance: str | None = None
+    montant_ht: float | None = None
+    tva: float | None = None
+    montant_ttc: float | None = None
+    type: str | None = None
+    paiement: str | None = None
+    statut: str | None = None
+    categorie: str | None = None
+    compte_pcm: str | None = None
+    exercice_rattachement: int | None = Field(default=None, ge=2000, le=2100)
+    traitement_comptable: str | None = None
+    validation_status: str | None = None
+    analyse_ai: str | None = None
 
 
 @router.post(
@@ -63,11 +91,18 @@ async def upload_factures(
         with open(path, "wb") as handle:
             shutil.copyfileobj(file.file, handle)
 
-        extracted = extract_facture(path, file.filename)
+        extracted = extract_facture(path, file.filename, dossier_id)
+        exercice_analysis = analyser_rattachement_exercice({**extracted, "nom_fichier": file.filename})
+        dossier = db.query(Dossier).filter(Dossier.id == dossier_id).first()
+        exercice_rattachement = extracted.get("exercice_rattachement") or exercice_analysis.get("exercice_rattachement") or (dossier.exercice_courant if dossier else None)
+        traitement_comptable = extracted.get("traitement_comptable") or exercice_analysis.get("traitement_comptable")
+        niveau_risque = extracted.get("niveau_risque") or exercice_analysis.get("niveau_risque")
+        commentaire_analyse = extracted.get("commentaire_analyse") or exercice_analysis.get("commentaire")
 
         facture = Facture(
             dossier_id=dossier_id,
             nom_fichier=file.filename,
+            stored_filename=safe_name,
             fournisseur=extracted["fournisseur"],
             code_tiers=extracted["code_tiers"],
             montant_ht=extracted["montant_ht"],
@@ -78,14 +113,21 @@ async def upload_factures(
             num_facture=extracted.get("num_facture"),
             confidence=extracted.get("confidence"),
             compte_pcm=extracted.get("compte_pcm"),
+            type=extracted.get("type") or "achat",
+            exercice_rattachement=exercice_rattachement,
+            traitement_comptable=traitement_comptable,
+            analyse_ai=commentaire_analyse,
+            validation_status="a_verifier" if niveau_risque in ("moyen", "eleve") else "a_valider",
+            texte_source=extracted.get("texte_source"),
+            ocr_payload=extracted.get("ocr_payload"),
             statut="traite",
-            paiement="en_attente",
+            paiement=extracted.get("paiement") or "en_attente",
         )
         db.add(facture)
         db.commit()
         db.refresh(facture)
 
-        ecritures = generer_ecritures({**extracted, "type": facture.type})
+        ecritures = generer_ecritures({**extracted, "type": facture.type, "compte_pcm": facture.compte_pcm})
         for row in ecritures:
             db.add(
                 Ecriture(
@@ -129,6 +171,47 @@ async def upload_factures(
 )
 def list_factures(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
+
+
+@router.patch(
+    "/item/{facture_id}",
+    summary="Mettre a jour une facture",
+    description="Corrige les champs valides d'une facture, notamment le rattachement d'exercice.",
+)
+def update_facture(facture_id: int, payload: FactureUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if facture is None:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+
+    data = payload.model_dump(exclude_unset=True)
+    allowed = set(FactureUpdate.model_fields)
+    for key, value in data.items():
+        if key in allowed:
+            setattr(facture, key, value)
+
+    db.commit()
+    db.refresh(facture)
+    return facture
+
+
+@router.get(
+    "/item/{facture_id}/file",
+    summary="Afficher le fichier original d'une facture",
+    description="Retourne le PDF/image original importe pour le visualisateur.",
+)
+def get_facture_file(facture_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if facture is None:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    if not facture.stored_filename:
+        raise HTTPException(status_code=404, detail="Fichier original non rattache")
+
+    safe_name = os.path.basename(facture.stored_filename)
+    path = os.path.join(UPLOAD_DIR, safe_name)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Fichier original introuvable")
+
+    return FileResponse(path, filename=facture.nom_fichier or safe_name)
 
 
 @router.get(
@@ -224,12 +307,12 @@ def export_dgi_tva(
         factures_all = [
             f for f in factures_all
             if f.date_facture and _dt.strptime(str(f.date_facture)[:7], "%Y-%m").month == mois
-            and _dt.strptime(str(f.date_facture)[:7], "%Y-%m").year == annee
+            and _facture_exercice(f) == annee
         ]
     elif annee:
         factures_all = [
             f for f in factures_all
-            if f.date_facture and str(f.date_facture).startswith(str(annee))
+            if f.date_facture and _facture_exercice(f) == annee
         ]
 
     achats = [f for f in factures_all if (f.type or "achat") == "achat"]

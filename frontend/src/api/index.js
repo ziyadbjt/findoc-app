@@ -20,6 +20,12 @@ export const getMe = (token) => axios.get(`${BASE}/auth/me`, auth(token));
 
 export const getDossiers = (token) => axios.get(`${BASE}/dossiers/`, auth(token));
 export const getDossier = (token, id) => axios.get(`${BASE}/dossiers/${id}`, auth(token));
+export const updateDossier = (token, id, payload) =>
+  axios.patch(`${BASE}/dossiers/${id}`, payload, auth(token));
+export const getPCM = (token, dossierId) =>
+  axios.get(`${BASE}/dossiers/${dossierId}/pcm`, auth(token));
+export const replacePCM = (token, dossierId, comptes) =>
+  axios.put(`${BASE}/dossiers/${dossierId}/pcm`, comptes, auth(token));
 export const extractSocieteFromDoc = (token, file) => {
   const form = new FormData();
   form.append("file", file);
@@ -38,6 +44,15 @@ export const deleteDossier = (token, id) => axios.delete(`${BASE}/dossiers/${id}
 
 export const getFactures = (token, dossierId) =>
   axios.get(`${BASE}/factures/${dossierId}`, auth(token));
+
+export const updateFacture = (token, factureId, payload) =>
+  axios.patch(`${BASE}/factures/item/${factureId}`, payload, auth(token));
+
+export const getFactureFile = (token, factureId) =>
+  axios.get(`${BASE}/factures/item/${factureId}/file`, {
+    ...auth(token),
+    responseType: "blob",
+  });
 
 export const uploadFactures = (token, dossierId, files) => {
   const form = new FormData();
