@@ -355,7 +355,7 @@ Structure ta réponse en Markdown avec ces sections :
 ## Anomalies détectées
 ## Actions prioritaires
 
-Sois concis, opérationnel, et mets en gras les chiffres importants."""
+Sois concis, opérationnel, et mets en gras les chiffres importants. N'utilise aucun emoji."""
 
     if not os.getenv("ANTHROPIC_API_KEY"):
         fallback = (
