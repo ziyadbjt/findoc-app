@@ -13,8 +13,8 @@ const readTVAConfig = (dossier) => {
     return {
       regime_tva: dossier?.regime_tva || "debits",
       default_rate: 20,
-      enable_tpe: true,
-      enable_bank: true,
+      enable_tpe: false,
+      enable_bank: false,
       cmi_base_ht: 12500,
       cmi_rate: 20,
       bank_base_ht: 6400,
@@ -25,8 +25,8 @@ const readTVAConfig = (dossier) => {
     return {
       regime_tva: dossier?.regime_tva || "debits",
       default_rate: 20,
-      enable_tpe: true,
-      enable_bank: true,
+      enable_tpe: false,
+      enable_bank: false,
       cmi_base_ht: 12500,
       cmi_rate: 20,
       bank_base_ht: 6400,
@@ -85,7 +85,7 @@ export default function TVAPage({ factures, dossier }) {
     });
   }, [factures, mode, selectedPeriod, currentQuarter, currentMonth]);
 
-  const achats = filteredFactures.filter((f) => f.type === "achat");
+  const achats = filteredFactures.filter((f) => (f.type || "achat") === "achat");
   const ventes = filteredFactures.filter((f) => f.type === "vente");
 
   const rows = [

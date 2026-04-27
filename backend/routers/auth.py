@@ -2,6 +2,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,7 +15,9 @@ from sqlalchemy.orm import Session
 from models.database import get_db
 from models.schemas import User
 
-load_dotenv()
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_DIR / ".env")
+load_dotenv(_BACKEND_DIR.parent / ".env")
 
 # Simple in-memory rate limiter: max 10 login attempts per IP per 60s
 _login_attempts: dict[str, list[float]] = defaultdict(list)

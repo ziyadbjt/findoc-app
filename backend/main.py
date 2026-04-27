@@ -43,7 +43,7 @@ app = FastAPI(
         "5. Chat IA"
     ),
     version="2.4.0",
-    contact={"name": "FinDoc", "email": "support@findoc.local"},
+    contact={"name": "FinDoc", "email": "support@findoc.app"},
 )
 
 app.add_middleware(

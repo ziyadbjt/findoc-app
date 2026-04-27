@@ -1,14 +1,22 @@
 import json
+import logging
 import os
 import re
 from collections.abc import Iterable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from anthropic import Anthropic
+from dotenv import load_dotenv
 
 
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_DIR / ".env")
+load_dotenv(_BACKEND_DIR.parent / ".env")
+logger = logging.getLogger(__name__)
 _client: Anthropic | None = None
+CLAUDE_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
 
 def _get_client() -> Anthropic:
@@ -110,7 +118,7 @@ Donnees OCR:
 
     try:
         message = _get_client().messages.create(
-            model="claude-sonnet-4-6",
+            model=CLAUDE_MODEL,
             max_tokens=256,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -123,6 +131,7 @@ Donnees OCR:
             "classification": (parsed.get("code_tiers") or base_response["code_tiers"])[:2],
         }
     except Exception:
+        logger.exception("Claude enrichment failed; using local fallback")
         return base_response
 
 
@@ -323,7 +332,7 @@ def stream_chat_response(message: str, history: list[dict[str, str]], context: d
 
     try:
         with _get_client().messages.stream(
-            model="claude-sonnet-4-6",
+            model=CLAUDE_MODEL,
             max_tokens=1024,
             system=system_prompt,
             messages=messages,
@@ -331,6 +340,7 @@ def stream_chat_response(message: str, history: list[dict[str, str]], context: d
             for text in stream.text_stream:
                 yield text
     except Exception:
+        logger.exception("Claude chat failed; using local fallback")
         answer = _fallback_chat_answer(message, context)
         for token in answer.split():
             yield token + " "

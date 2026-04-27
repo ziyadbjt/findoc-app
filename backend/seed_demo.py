@@ -1,6 +1,7 @@
 import sqlite3, datetime
 
-db = 'C:/Users/hp/Desktop/findoc-app/backend/findoc.db'
+import os as _os
+db = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'findoc.db')
 conn = sqlite3.connect(db)
 
 # ── Migrate factures ──────────────────────────────────────────────────────────

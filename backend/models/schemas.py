@@ -91,6 +91,16 @@ class TeamMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class PrivateMessage(Base):
+    __tablename__ = "private_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    dossier_id = Column(Integer, ForeignKey("dossiers.id"), index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), index=True)
+    recipient_id = Column(Integer, ForeignKey("users.id"), index=True)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Relance(Base):
     __tablename__ = "relances"
     id = Column(Integer, primary_key=True, index=True)
