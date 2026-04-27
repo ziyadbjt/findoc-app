@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import get_db
-from models.schemas import Ecriture, Facture
+from models.schemas import Dossier, Ecriture, Facture
 from routers.auth import get_current_user
-from services.claude import generer_ecritures
+from services.claude import generer_ecritures, generate_monthly_report
 from services.document_ai import extract_facture
 from services.export import build_export_workbook
 
@@ -142,6 +142,43 @@ def list_ecritures(dossier_id: int, db: Session = Depends(get_db), current_user=
     if not facture_ids:
         return []
     return db.query(Ecriture).filter(Ecriture.facture_id.in_(facture_ids)).all()
+
+
+@router.get(
+    "/{dossier_id}/rapport-mensuel",
+    summary="Générer un rapport mensuel IA",
+    description="Stream SSE — Claude génère un résumé comptable mensuel (CA, achats, TVA, retards, anomalies).",
+)
+def stream_rapport_mensuel(
+    dossier_id: int,
+    mois: int = 0,
+    annee: int = 0,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from datetime import datetime as _dt
+    import json as _json
+
+    dossier = db.query(Dossier).filter(Dossier.id == dossier_id).one_or_none()
+    factures_all = db.query(Facture).filter(Facture.dossier_id == dossier_id).all()
+
+    if mois and annee:
+        factures_all = [
+            f for f in factures_all
+            if f.date_facture and str(f.date_facture)[:7] == f"{annee}-{mois:02d}"
+        ]
+
+    def event_generator():
+        yield "event: ready\ndata: {}\n\n"
+        for token in generate_monthly_report(dossier, factures_all, mois or _dt.utcnow().month, annee or _dt.utcnow().year):
+            yield f"event: chunk\ndata: {_json.dumps({'text': token})}\n\n"
+        yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get(

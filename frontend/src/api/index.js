@@ -112,6 +112,39 @@ export async function sendChatMessage(token, payload, handlers = {}) {
   if (buffer.trim()) emitEvent(buffer);
 }
 
+export async function generateMonthlyReport(token, dossierId, mois, annee, handlers = {}) {
+  const response = await fetch(
+    `${BASE}/factures/${dossierId}/rapport-mensuel?mois=${mois}&annee=${annee}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!response.ok || !response.body) throw new Error("Rapport indisponible");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const emitEvent = (rawBlock) => {
+    const lines = rawBlock.split("\n").filter(Boolean);
+    const event = lines.find((l) => l.startsWith("event:"))?.slice(6).trim() || "message";
+    const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim() || "{}";
+    let data = {};
+    try { data = JSON.parse(dataLine); } catch { data = {}; }
+    if (event === "chunk" && data.text) handlers.onChunk?.(data.text);
+    if (event === "done") handlers.onDone?.(data);
+    if (event === "ready") handlers.onReady?.(data);
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    blocks.forEach(emitEvent);
+  }
+  if (buffer.trim()) emitEvent(buffer);
+}
+
 export const getTeamMessages = (token, dossierId) =>
   axios.get(`${BASE}/chat/team/${dossierId}`, auth(token));
 

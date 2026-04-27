@@ -21,6 +21,7 @@ import AuditPage from "./AuditPage";
 import AnomaliesPage from "./AnomaliesPage";
 import TresoPage from "./TresoPage";
 import ReconciliationPage from "./ReconciliationPage";
+import RapportMensuelPage from "./RapportMensuelPage";
 
 const CRUMBS = {
   overview: ["Dossier", "Apercu"],
@@ -35,6 +36,7 @@ const CRUMBS = {
   treso: ["Dossier", "Tresorerie"],
   reconciliation: ["Dossier", "Réconciliation"],
   parametres: ["Dossier", "Parametres"],
+  rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
 };
 
 export default function Dashboard() {
@@ -322,6 +324,7 @@ export default function Dashboard() {
           {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
           {!loadingData && route === "reconciliation" && <ReconciliationPage factures={factures} dossierId={id} />}
           {!loadingData && route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+          {!loadingData && route === "rapport_mensuel" && <RapportMensuelPage dossierId={id} dossier={dossier} />}
         </div>
       </main>
 

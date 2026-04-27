@@ -313,6 +313,12 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
             <Download size={14} />
             Export DGI TVA
           </button>
+          {onNavigate && (
+            <button className="btn btn-primary" onClick={() => onNavigate("rapport_mensuel")}>
+              <Sparkles size={14} />
+              Rapport IA
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => setShowCustomize(true)}>
             <Settings2 size={14} />
             Personnaliser

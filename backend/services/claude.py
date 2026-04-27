@@ -282,6 +282,105 @@ def _handle_slash_command(message: str, context: dict[str, Any]) -> str | None:
     return None
 
 
+def generate_monthly_report(
+    dossier: Any,
+    factures: list[Any],
+    mois: int,
+    annee: int,
+) -> Iterable[str]:
+    BAM_RATE = 0.0225
+    PENALTY_RATE = BAM_RATE + 0.03
+    LEGAL_DELAY = 60
+    today = datetime.utcnow().date()
+
+    achats = [f for f in factures if (getattr(f, "type", None) or "achat") != "vente"]
+    ventes = [f for f in factures if (getattr(f, "type", None) or "") == "vente"]
+    retards = [f for f in factures if (getattr(f, "paiement", None) or "") == "en_retard"]
+
+    ca_ttc = sum(float(getattr(f, "montant_ttc", 0) or 0) for f in ventes)
+    achats_ttc = sum(float(getattr(f, "montant_ttc", 0) or 0) for f in achats)
+    tva_collectee = sum(float(getattr(f, "tva", 0) or 0) for f in ventes)
+    tva_deductible = sum(float(getattr(f, "tva", 0) or 0) for f in achats)
+    solde_tva = round(tva_collectee - tva_deductible, 2)
+
+    penalites = 0.0
+    for f in retards:
+        try:
+            echeance = datetime.strptime(str(getattr(f, "date_echeance", "") or ""), "%Y-%m-%d").date()
+            overdue_days = max(0, (today - echeance).days)
+            montant = float(getattr(f, "montant_ttc", 0) or 0)
+            penalites += montant * PENALTY_RATE * max(0, overdue_days - LEGAL_DELAY) / 365
+        except Exception:
+            pass
+
+    low_conf = [f for f in factures if float(getattr(f, "confidence", 1) or 1) < 0.8]
+
+    top_fournisseurs: dict[str, float] = {}
+    for f in achats:
+        nom = getattr(f, "fournisseur", None) or "Inconnu"
+        top_fournisseurs[nom] = top_fournisseurs.get(nom, 0) + float(getattr(f, "montant_ttc", 0) or 0)
+    top3 = sorted(top_fournisseurs.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    raison = getattr(dossier, "raison_sociale", None) or "Société"
+    periode = f"{mois:02d}/{annee}"
+
+    prompt = f"""Tu es expert-comptable marocain (PCM, Loi 69-21, DGI). Génère un rapport mensuel clair et actionnable pour le cabinet.
+
+Dossier : {raison}
+Période : {periode}
+Nombre de factures : {len(factures)} ({len(achats)} achats, {len(ventes)} ventes)
+
+CHIFFRES CLÉS :
+- Chiffre d'affaires TTC : {ca_ttc:,.0f} MAD
+- Achats TTC : {achats_ttc:,.0f} MAD
+- TVA collectée : {tva_collectee:,.0f} MAD
+- TVA déductible : {tva_deductible:,.0f} MAD
+- Solde TVA net : {solde_tva:+,.0f} MAD {"(à reverser DGI)" if solde_tva > 0 else "(crédit de TVA)"}
+- Factures en retard : {len(retards)} ({sum(float(getattr(f, "montant_ttc", 0) or 0) for f in retards):,.0f} MAD)
+- Pénalités Loi 69-21 estimées : {penalites:,.0f} MAD
+- Factures à confiance faible (<80%) : {len(low_conf)}
+
+TOP FOURNISSEURS (achats) :
+{chr(10).join(f"- {nom} : {montant:,.0f} MAD" for nom, montant in top3) or "- Aucun"}
+
+FACTURES EN RETARD :
+{chr(10).join(f"- {getattr(f, 'fournisseur', '?')} / {getattr(f, 'num_facture', '?')} / {float(getattr(f, 'montant_ttc', 0) or 0):,.0f} MAD / éch. {getattr(f, 'date_echeance', '?')}" for f in retards[:8]) or "- Aucune"}
+
+Structure ta réponse en Markdown avec ces sections :
+## Résumé exécutif
+## Ventes & Chiffre d'affaires
+## Achats & Dépenses
+## TVA & Obligations fiscales
+## Retards de paiement & Pénalités
+## Anomalies détectées
+## Actions prioritaires
+
+Sois concis, opérationnel, et mets en gras les chiffres importants."""
+
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        fallback = (
+            f"## Rapport mensuel {periode} — {raison}\n\n"
+            f"**CA TTC :** {ca_ttc:,.0f} MAD · **Achats :** {achats_ttc:,.0f} MAD\n\n"
+            f"**Solde TVA :** {solde_tva:+,.0f} MAD · **Retards :** {len(retards)} facture(s)\n\n"
+            f"*(Clé API manquante — rapport complet indisponible)*"
+        )
+        for token in fallback.split():
+            yield token + " "
+        return
+
+    try:
+        with _get_client().messages.stream(
+            model=CLAUDE_MODEL,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+    except Exception:
+        logger.exception("Claude monthly report failed")
+        yield f"Erreur lors de la génération du rapport. Veuillez réessayer."
+
+
 def stream_chat_response(message: str, history: list[dict[str, str]], context: dict[str, Any]) -> Iterable[str]:
     # Handle slash commands directly
     slash_response = _handle_slash_command(message, context)
