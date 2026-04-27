@@ -21,6 +21,7 @@ class Dossier(Base):
     ville = Column(String)
     secteur = Column(String)
     regime_tva = Column(String, default="debits")
+    exercice_courant = Column(Integer, nullable=True)
     # Identifiants fiscaux
     if_number = Column(String, nullable=True)
     rc_number = Column(String, nullable=True)
@@ -41,6 +42,7 @@ class Facture(Base):
     id = Column(Integer, primary_key=True, index=True)
     dossier_id = Column(Integer, ForeignKey("dossiers.id"))
     nom_fichier = Column(String)
+    stored_filename = Column(String, nullable=True)
     fournisseur = Column(String)
     code_tiers = Column(String)
     montant_ht = Column(Float)
@@ -56,6 +58,12 @@ class Facture(Base):
     confidence = Column(Float, default=0.95, nullable=True)
     categorie = Column(String, nullable=True)
     compte_pcm = Column(String, nullable=True)
+    exercice_rattachement = Column(Integer, nullable=True)
+    traitement_comptable = Column(String, default="exercice_courant", nullable=True)
+    analyse_ai = Column(Text, nullable=True)
+    validation_status = Column(String, default="a_valider", nullable=True)
+    texte_source = Column(Text, nullable=True)
+    ocr_payload = Column(Text, nullable=True)
     dossier = relationship("Dossier", back_populates="factures")
 
 class Ecriture(Base):
@@ -67,6 +75,17 @@ class Ecriture(Base):
     debit = Column(Float, default=0)
     credit = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PCMCompte(Base):
+    __tablename__ = "pcm_comptes"
+    id = Column(Integer, primary_key=True, index=True)
+    dossier_id = Column(Integer, ForeignKey("dossiers.id"), index=True)
+    compte = Column(String, index=True)
+    libelle = Column(String)
+    classe = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class Correction(Base):
     __tablename__ = "corrections"
@@ -88,4 +107,42 @@ class TeamMessage(Base):
     dossier_id = Column(Integer, ForeignKey("dossiers.id"), index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PrivateMessage(Base):
+    __tablename__ = "private_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    dossier_id = Column(Integer, ForeignKey("dossiers.id"), index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), index=True)
+    recipient_id = Column(Integer, ForeignKey("users.id"), index=True)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Relance(Base):
+    __tablename__ = "relances"
+    id = Column(Integer, primary_key=True, index=True)
+    facture_id = Column(Integer, ForeignKey("factures.id"), index=True)
+    niveau = Column(Integer, default=1)
+    destinataire_email = Column(String)
+    destinataire_nom = Column(String, nullable=True)
+    sujet = Column(String)
+    corps = Column(Text)
+    envoye = Column(Integer, default=0)
+    envoye_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_email = Column(String, nullable=True)
+    action = Column(String)
+    ressource = Column(String, nullable=True)
+    ressource_id = Column(Integer, nullable=True)
+    details = Column(Text, nullable=True)
+    ip = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)

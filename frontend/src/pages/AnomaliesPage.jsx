@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AlertTriangle, Copy, TrendingUp, UserX, Zap } from "lucide-react";
+import { AlertTriangle, CalendarClock, Copy, TrendingUp, UserX, Zap } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 
 function detectAnomalies(factures) {
@@ -89,6 +89,24 @@ function detectAnomalies(factures) {
     }
   });
 
+  // 5. Rattachement d'exercice — facture à reporter ou à valider
+  factures.forEach(f => {
+    const dateYear = f.date_facture ? Number(String(f.date_facture).slice(0, 4)) : null;
+    const exercice = f.exercice_rattachement ? Number(f.exercice_rattachement) : dateYear;
+    const traitement = f.traitement_comptable || "exercice_courant";
+    if (!dateYear || !exercice) return;
+    if (exercice !== dateYear || traitement !== "exercice_courant" || f.validation_status === "a_verifier") {
+      anomalies.push({
+        type: "rattachement_exercice",
+        severity: exercice !== dateYear ? "high" : "medium",
+        label: "Rattachement exercice",
+        desc: `${f.fournisseur || f.num_facture || "Facture"} · date ${dateYear}, exercice proposé ${exercice} · ${f.analyse_ai || traitement}`,
+        factures: [f],
+        icon: "calendar",
+      });
+    }
+  });
+
   return anomalies;
 }
 
@@ -103,6 +121,7 @@ const ICONS = {
   trending: <TrendingUp size={15} />,
   userx: <UserX size={15} />,
   zap: <Zap size={15} />,
+  calendar: <CalendarClock size={15} />,
 };
 
 export default function AnomaliesPage({ factures }) {

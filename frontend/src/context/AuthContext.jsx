@@ -2,7 +2,12 @@ import { createContext, useContext, useState, useEffect } from "react"
 import axios from "axios"
 
 const AuthContext = createContext()
-const API_BASE = "http://localhost:8000"
+const API_HOST =
+  typeof window !== "undefined" && window.location.hostname
+    ? window.location.hostname
+    : "127.0.0.1"
+
+const API_BASE = `http://${API_HOST}:8000`
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -33,17 +38,11 @@ export function AuthProvider({ children }) {
       try {
         if (storedToken) {
           await hydrateSession(storedToken)
-        } else {
-          await loginWithCredentials("ziyad@cabinetchami.ma", "password123")
         }
       } catch {
-        try {
-          await loginWithCredentials("ziyad@cabinetchami.ma", "password123")
-        } catch {
-          localStorage.removeItem("token")
-          setToken(null)
-          setUser(null)
-        }
+        localStorage.removeItem("token")
+        setToken(null)
+        setUser(null)
       } finally {
         setAuthReady(true)
       }
@@ -59,6 +58,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token")
     setToken(null)
     setUser(null)
+    window.location.href = "/login"
   }
 
   return (

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { ToastProvider } from "./context/ToastContext"
 import Login from "./pages/Login"
@@ -12,12 +12,16 @@ document.documentElement.setAttribute("data-theme", savedTheme);
 
 function PrivateRoute({ children }) {
   const { token, authReady } = useAuth()
+  const location = useLocation()
   if (!authReady) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#060b0a", color: "#8fd4bc", fontFamily: "Inter, sans-serif", fontSize: 13 }}>
         Chargement…
       </div>
     )
+  }
+  if (!token) {
+    return <Navigate to="/login" replace state={{ from: location }} />
   }
   return children
 }

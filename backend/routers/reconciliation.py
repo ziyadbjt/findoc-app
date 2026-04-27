@@ -1,5 +1,6 @@
 import os
 import shutil
+import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
@@ -95,7 +96,9 @@ async def upload_releve_bancaire(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    path = f"{UPLOAD_DIR}/{dossier_id}_bank_{file.filename}"
+    safe_ext = os.path.splitext(file.filename or "")[-1].lower()
+    safe_name = f"{dossier_id}_bank_{uuid.uuid4().hex}{safe_ext}"
+    path = os.path.join(UPLOAD_DIR, safe_name)
     with open(path, "wb") as handle:
         shutil.copyfileobj(file.file, handle)
 
@@ -104,18 +107,46 @@ async def upload_releve_bancaire(
     bank_lines = []
 
     for line in extracted["transactions"]:
+        line_amount = abs(float(line.get("montant") or 0))
+        line_date_str = line.get("date") or ""
+        line_label = (line.get("libelle") or "").upper()
         best_match = None
-        best_gap = None
+        best_score = None
+
         for facture in factures:
-            gap = abs(abs(float(line.get("montant") or 0)) - float(facture.montant_ttc or 0))
-            if best_gap is None or gap < best_gap:
-                best_gap = gap
+            if not facture.montant_ttc:
+                continue
+            amount_gap = abs(line_amount - float(facture.montant_ttc))
+            if amount_gap > line_amount * 0.02 and amount_gap > 5:
+                continue
+            score = amount_gap
+
+            # bonus: date proximity (within 10 days)
+            try:
+                from datetime import datetime as _dt
+                f_date = _dt.strptime(str(facture.date_echeance or facture.date_facture or ""), "%Y-%m-%d")
+                l_date = _dt.strptime(line_date_str[:10], "%Y-%m-%d")
+                date_diff = abs((f_date - l_date).days)
+                if date_diff <= 10:
+                    score -= 10 - date_diff
+            except Exception:
+                pass
+
+            # bonus: supplier name appears in line label
+            fournisseur_words = [w for w in (facture.fournisseur or "").upper().split() if len(w) > 3]
+            if any(w in line_label for w in fournisseur_words):
+                score -= 5
+
+            if best_score is None or score < best_score:
+                best_score = score
                 best_match = facture
+
         bank_lines.append(
             {
                 **line,
-                "matched_to": best_match.id if best_match and (best_gap or 0) < 5 else None,
-                "matched_label": best_match.fournisseur if best_match and (best_gap or 0) < 5 else None,
+                "matched_to": best_match.id if best_match else None,
+                "matched_label": best_match.fournisseur if best_match else None,
+                "match_score": round(best_score or 0, 2),
             }
         )
 

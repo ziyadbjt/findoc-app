@@ -51,7 +51,7 @@ def build_export_workbook(factures, ecritures, taux_bam: float = 2.25):
 
     journal = wb.active
     journal.title = "Journal SAGE"
-    journal.append(["Numero facture", "Date", "Compte PCM", "Code tiers", "Libelle", "Debit (MAD)", "Credit (MAD)"])
+    journal.append(["Numero facture", "Date", "Exercice", "Traitement", "Compte PCM", "Code tiers", "Libelle", "Debit (MAD)", "Credit (MAD)"])
     facture_map = {facture.id: facture for facture in factures}
     for ecriture in ecritures:
         facture = facture_map.get(ecriture.facture_id)
@@ -59,6 +59,8 @@ def build_export_workbook(factures, ecritures, taux_bam: float = 2.25):
             [
                 facture.num_facture or facture.nom_fichier if facture else "",
                 facture.date_facture if facture else "",
+                facture.exercice_rattachement if facture else "",
+                facture.traitement_comptable if facture else "",
                 ecriture.compte_pcm,
                 facture.code_tiers if facture else "",
                 ecriture.libelle,
@@ -85,7 +87,9 @@ def build_export_workbook(factures, ecritures, taux_bam: float = 2.25):
     tva_sheet.append(["Mois", "TVA collectee", "TVA deductible", "Solde DGI"])
     monthly = {}
     for facture in factures:
-        month = (facture.date_facture or "")[:7] or "inconnu"
+        date_month = (facture.date_facture or "")[5:7]
+        exercice = facture.exercice_rattachement or (facture.date_facture or "")[:4]
+        month = f"{exercice}-{date_month}" if exercice and date_month else (facture.date_facture or "")[:7] or "inconnu"
         row = monthly.setdefault(month, {"collectee": 0.0, "deductible": 0.0})
         if (facture.type or "achat") == "vente":
             row["collectee"] += float(facture.tva or 0)

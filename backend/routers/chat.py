@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import get_db
-from models.schemas import TeamMessage, User
+from models.schemas import PrivateMessage, TeamMessage, User
 from routers.auth import get_current_user
 from services.chat_context import build_chat_context
 from services.claude import stream_chat_response
@@ -35,6 +35,28 @@ class TeamMessageResponse(BaseModel):
     user_id: int
     user_name: str
     user_email: str
+    content: str
+    created_at: str
+
+
+class PrivateContactResponse(BaseModel):
+    id: int
+    email: str
+    nom: str
+    role: str
+
+
+class PrivateMessageCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=4000, description="Message prive")
+
+
+class PrivateMessageResponse(BaseModel):
+    id: int
+    dossier_id: int
+    sender_id: int
+    sender_name: str
+    sender_email: str
+    recipient_id: int
     content: str
     created_at: str
 
@@ -118,6 +140,113 @@ def create_team_message(
         "user_id": message.user_id,
         "user_name": current_user.nom or current_user.email,
         "user_email": current_user.email,
+        "content": message.content,
+        "created_at": message.created_at.isoformat(),
+    }
+
+
+@router.get(
+    "/chat/private/{dossier_id}/contacts",
+    response_model=list[PrivateContactResponse],
+    summary="Lister les contacts disponibles pour le chat prive",
+)
+def list_private_contacts(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    users = (
+        db.query(User)
+        .filter(User.id != current_user.id)
+        .order_by(User.nom.asc(), User.email.asc())
+        .all()
+    )
+    return [
+        {
+            "id": user.id,
+            "email": user.email,
+            "nom": user.nom or user.email,
+            "role": user.role,
+        }
+        for user in users
+    ]
+
+
+@router.get(
+    "/chat/private/{dossier_id}/{other_user_id}",
+    response_model=list[PrivateMessageResponse],
+    summary="Lister une conversation privee",
+)
+def list_private_messages(
+    dossier_id: int,
+    other_user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    rows = (
+        db.query(PrivateMessage, User)
+        .join(User, User.id == PrivateMessage.sender_id)
+        .filter(PrivateMessage.dossier_id == dossier_id)
+        .filter(
+            (
+                (PrivateMessage.sender_id == current_user.id)
+                & (PrivateMessage.recipient_id == other_user_id)
+            )
+            | (
+                (PrivateMessage.sender_id == other_user_id)
+                & (PrivateMessage.recipient_id == current_user.id)
+            )
+        )
+        .order_by(PrivateMessage.created_at.asc(), PrivateMessage.id.asc())
+        .all()
+    )
+    return [
+        {
+            "id": message.id,
+            "dossier_id": message.dossier_id,
+            "sender_id": message.sender_id,
+            "sender_name": sender.nom or sender.email,
+            "sender_email": sender.email,
+            "recipient_id": message.recipient_id,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+        }
+        for message, sender in rows
+    ]
+
+
+@router.post(
+    "/chat/private/{dossier_id}/{other_user_id}",
+    response_model=PrivateMessageResponse,
+    summary="Envoyer un message prive",
+)
+def create_private_message(
+    dossier_id: int,
+    other_user_id: int,
+    payload: PrivateMessageCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Message vide")
+
+    recipient = db.query(User).filter(User.id == other_user_id).first()
+    if recipient is None:
+        raise HTTPException(status_code=404, detail="Contact introuvable")
+
+    message = PrivateMessage(
+        dossier_id=dossier_id,
+        sender_id=current_user.id,
+        recipient_id=recipient.id,
+        content=content,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return {
+        "id": message.id,
+        "dossier_id": message.dossier_id,
+        "sender_id": message.sender_id,
+        "sender_name": current_user.nom or current_user.email,
+        "sender_email": current_user.email,
+        "recipient_id": message.recipient_id,
         "content": message.content,
         "created_at": message.created_at.isoformat(),
     }

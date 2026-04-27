@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { RefreshCw } from "lucide-react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
-  getDossier, getFactures, getEcritures, exportJournal, MOCK_NOTIFICATIONS,
+  getDossier, getFactures, getEcritures, exportJournal, MOCK_NOTIFICATIONS, updateDossier,
 } from "../api";
 import { enrichDossier, enrichFacture } from "../utils/format";
 import { Sidebar, Topbar, CmdK, NotificationsPanel } from "../components/Shell";
@@ -20,6 +20,8 @@ import TVAPage from "./TVAPage";
 import AuditPage from "./AuditPage";
 import AnomaliesPage from "./AnomaliesPage";
 import TresoPage from "./TresoPage";
+import ReconciliationPage from "./ReconciliationPage";
+import RapportMensuelPage from "./RapportMensuelPage";
 
 const CRUMBS = {
   overview: ["Dossier", "Apercu"],
@@ -32,19 +34,23 @@ const CRUMBS = {
   audit: ["Dossier", "Audit"],
   anomalies: ["Dossier", "Anomalies"],
   treso: ["Dossier", "Tresorerie"],
+  reconciliation: ["Dossier", "Réconciliation"],
   parametres: ["Dossier", "Parametres"],
+  rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
 };
 
 export default function Dashboard() {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { token, logout, user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
   const [dossier, setDossier] = useState(null);
+  const [currentExercise, setCurrentExercise] = useState(() => Number(localStorage.getItem(`findoc:exercise:${id}`)) || new Date().getFullYear());
   const [factures, setFactures] = useState([]);
   const [ecritures, setEcritures] = useState([]);
-  const [route, setRoute] = useState("overview");
+  const [route, setRoute] = useState(() => searchParams.get("tab") || "overview");
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [accent] = useState(() => localStorage.getItem("accent") || "amber");
   const [density] = useState(() => localStorage.getItem("density") || "balanced");
@@ -78,10 +84,16 @@ export default function Dashboard() {
         e.preventDefault();
         setShowCmd(true);
       }
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        setShowCmd(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const [loadingData, setLoadingData] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!token || !id) return;
@@ -92,16 +104,38 @@ export default function Dashboard() {
         getEcritures(token, id),
       ]);
       setDossier(enrichDossier(dosRes.data));
+      const dossierExercise = dosRes.data.exercice_courant || Number(localStorage.getItem(`findoc:exercise:${id}`)) || new Date().getFullYear();
+      setCurrentExercise(dossierExercise);
       setFactures(facRes.data.map(enrichFacture));
       setEcritures(ecrRes.data || []);
     } catch {
       toast("Erreur lors du chargement des donnees", "neg");
+    } finally {
+      setLoadingData(false);
     }
   }, [token, id, toast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && tab !== route) setRoute(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (route === "overview") {
+      if (currentTab) setSearchParams({}, { replace: true });
+      return;
+    }
+    if (currentTab !== route) {
+      setSearchParams({ tab: route }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route]);
 
   const runPullRefresh = useCallback(async () => {
     pullRef.current.refreshing = true;
@@ -209,6 +243,18 @@ export default function Dashboard() {
 
   const handleSwitchDossier = () => navigate("/dossiers");
 
+  const handleChangeExercise = async (year) => {
+    setCurrentExercise(year);
+    localStorage.setItem(`findoc:exercise:${id}`, String(year));
+    try {
+      const response = await updateDossier(token, id, { exercice_courant: year });
+      setDossier(enrichDossier(response.data));
+      toast(`Exercice ${year} sélectionné`, "pos");
+    } catch {
+      toast("Exercice non sauvegardé", "neg");
+    }
+  };
+
   const handleExport = async () => {
     try {
       const res = await exportJournal(token, id);
@@ -235,7 +281,7 @@ export default function Dashboard() {
     ? [dossier.raison_sociale, ...(CRUMBS[route] || ["Dossier"]).slice(1)]
     : CRUMBS[route] || ["Dossier"];
 
-  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user };
+  const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user, currentExercise };
 
   return (
     <div className="app-topnav" data-density={density}>
@@ -252,6 +298,8 @@ export default function Dashboard() {
         onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
         theme={theme}
         hasNotifs={MOCK_NOTIFICATIONS.length > 0}
+        currentExercise={currentExercise}
+        onChangeExercise={handleChangeExercise}
       />
 
       <main
@@ -274,17 +322,26 @@ export default function Dashboard() {
           <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
         </div>
         <div key={route} className="page-transition">
-          {route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-          {route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-          {route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-          {route === "relances" && <RelancesPage {...pageProps} />}
-          {route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
-          {route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
-          {route === "tva" && <TVAPage factures={factures} dossier={dossier} />}
-          {route === "audit" && <AuditPage dossier={dossier} user={user} />}
-          {route === "anomalies" && <AnomaliesPage factures={factures} />}
-          {route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
-          {route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+          {loadingData && (
+            <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {[1, 2, 3].map(i => (
+                <div key={i} className="skeleton" style={{ height: i === 1 ? 120 : 60, borderRadius: 12, width: i === 3 ? "60%" : "100%" }} />
+              ))}
+            </div>
+          )}
+          {!loadingData && route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
+          {!loadingData && route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
+          {!loadingData && route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
+          {!loadingData && route === "relances" && <RelancesPage {...pageProps} />}
+          {!loadingData && route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
+          {!loadingData && route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
+          {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />}
+          {!loadingData && route === "audit" && <AuditPage dossier={dossier} user={user} />}
+          {!loadingData && route === "anomalies" && <AnomaliesPage factures={factures} />}
+          {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
+          {!loadingData && route === "reconciliation" && <ReconciliationPage factures={factures} dossierId={id} />}
+          {!loadingData && route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+          {!loadingData && route === "rapport_mensuel" && <RapportMensuelPage dossierId={id} dossier={dossier} />}
         </div>
       </main>
 

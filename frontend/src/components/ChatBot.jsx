@@ -304,7 +304,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
           position: "fixed",
           right: 24,
           bottom: 24,
-          zIndex: 79,
+          zIndex: 45,
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -341,7 +341,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
       {mounted && (
         <div
           className={`chatbot-shell ${visible ? "is-open" : "is-closing"}`}
-          style={{ position: "fixed", right: 24, bottom: 24, width: 420, maxWidth: "calc(100vw - 24px)", zIndex: 80 }}
+          style={{ position: "fixed", right: 24, bottom: 24, width: 420, maxWidth: "calc(100vw - 24px)", zIndex: 46 }}
         >
           <div className="card chatbot-card" style={{ padding: 0, overflow: "hidden", boxShadow: "0 24px 80px rgba(20, 20, 20, 0.18)" }}>
         <div className="chatbot-head" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-1)" }}>
@@ -478,6 +478,21 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
           </div>
         )}
 
+        {mode === "ai" && messages.length <= 1 && (
+          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line-1)", display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {["/tva", "/relance", "/anomalies", "/aide"].map(cmd => (
+              <button
+                key={cmd}
+                className="chip"
+                style={{ fontSize: 11.5 }}
+                onClick={() => { setInput(cmd); }}
+              >
+                {cmd}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="chatbot-compose" style={{ padding: 14, borderTop: "1px solid var(--line-1)" }}>
           <div style={{ display: "flex", gap: 8 }}>
             <textarea
@@ -494,7 +509,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
               disabled={isPrivateMode && !selectedContact}
               placeholder={
                 mode === "ai"
-                  ? "Ex: Quelles factures sont en retard ?"
+                  ? "Posez une question ou tapez /aide pour les commandes"
                   : isProjectMode
                     ? "Ecrire dans le canal projet..."
                     : selectedContact

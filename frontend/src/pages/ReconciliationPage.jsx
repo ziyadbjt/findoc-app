@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
-import { GitMerge, Check, AlertTriangle, RefreshCw, X, ChevronRight } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { GitMerge, Check, AlertTriangle, RefreshCw, X, ChevronRight, Upload, FileText } from "lucide-react";
 import { formatMAD, formatDate, formatDateShort } from "../utils/format";
-import { MOCK_BANK_LINES } from "../api";
+import { uploadBankStatement } from "../api";
+import { useAuth } from "../context/AuthContext";
 
 const STATUS_COLORS = {
   rapproché:     { bg: "var(--pos-bg)",    ink: "var(--pos-ink)" },
@@ -15,12 +16,17 @@ function AmountDiff({ a, b }) {
   return <span style={{ color: "var(--warn-ink)", fontSize: 11 }}>Δ {formatMAD(diff).split(",")[0]}</span>;
 }
 
-export default function ReconciliationPage({ factures }) {
-  const bankLines = MOCK_BANK_LINES;
-  const [pairs, setPairs] = useState({});       // bankLineId → factureId
-  const [ignored, setIgnored] = useState({});   // bankLineId → true
+export default function ReconciliationPage({ factures, dossierId }) {
+  const { token } = useAuth();
+  const [bankLines, setBankLines] = useState([]);
+  const [pairs, setPairs] = useState({});
+  const [ignored, setIgnored] = useState({});
   const [activeLine, setActiveLine] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [sourceAi, setSourceAi] = useState(null);
+  const fileInputRef = useRef(null);
 
   const pendingFactures = useMemo(
     () => factures.filter(f => f.paiement !== "payée" && f.statut === "traité"),
@@ -50,13 +56,46 @@ export default function ReconciliationPage({ factures }) {
     const newPairs = { ...pairs };
     bankLines.forEach(bl => {
       if (newPairs[bl.id] || ignored[bl.id]) return;
+      // Use server suggestion first
+      if (bl.matched_to && !matchedFactureIds.has(String(bl.matched_to))) {
+        newPairs[bl.id] = String(bl.matched_to);
+        return;
+      }
       const match = pendingFactures.find(f =>
         !matchedFactureIds.has(String(f.id)) &&
-        Math.abs((f.montant_ttc || 0) - Math.abs(bl.montant)) < 1
+        Math.abs((f.montant_ttc || 0) - Math.abs(bl.montant)) < 5
       );
       if (match) newPairs[bl.id] = String(match.id);
     });
     setPairs(newPairs);
+  };
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const res = await uploadBankStatement(token, dossierId, file);
+      const lines = (res.data.bank_lines || []).map((l, i) => ({
+        ...l,
+        id: l.id || `txn-${i + 1}`,
+        montant: l.montant || 0,
+        libelle: l.libelle || l.label || `Ligne ${i + 1}`,
+        reference: l.reference || `REF${String(i + 1).padStart(3, "0")}`,
+      }));
+      setBankLines(lines);
+      setSourceAi(res.data.source_ai || null);
+      // Auto-apply server suggestions
+      const suggestions = {};
+      lines.forEach(l => {
+        if (l.matched_to) suggestions[l.id] = String(l.matched_to);
+      });
+      setPairs(suggestions);
+    } catch (err) {
+      setUploadError("Erreur lors de l'import du relevé. Vérifiez le format du fichier.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const linkPair = (bankId, factureId) => {
@@ -84,14 +123,62 @@ export default function ReconciliationPage({ factures }) {
     return s + (f?.montant_ttc || 0);
   }, 0);
 
+  if (bankLines.length === 0) {
+    return (
+      <div className="page-inner">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Réconciliation bancaire</h1>
+            <p className="page-subtitle">Importez un relevé bancaire pour commencer le rapprochement</p>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 48, textAlign: "center", maxWidth: 520, margin: "40px auto" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: "var(--accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <FileText size={24} style={{ color: "var(--accent-ink)" }} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Importer un relevé bancaire</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 24 }}>
+            Formats supportés : PDF, CSV, TXT<br />
+            Compatible CIH, Attijariwafa, BMCE, Banque Populaire
+          </div>
+          {uploadError && (
+            <div style={{ background: "var(--neg-bg)", color: "var(--neg-ink)", borderRadius: 8, padding: "10px 14px", fontSize: 12.5, marginBottom: 16 }}>
+              {uploadError}
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.csv,.txt,.xls,.xlsx"
+            style={{ display: "none" }}
+            onChange={e => handleUpload(e.target.files?.[0])}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? <><RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} /> Import en cours…</> : <><Upload size={13} /> Importer un relevé</>}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-inner">
       <div className="page-header">
         <div>
           <h1 className="page-title">Réconciliation bancaire</h1>
-          <p className="page-subtitle">Rapprochement relevé BMCE · {bankLines.length} lignes</p>
+          <p className="page-subtitle">
+            {sourceAi === "google_document_ai" ? "Extrait par Google Document AI" : "Extrait par analyse texte"} · {bankLines.length} lignes
+          </p>
         </div>
         <div className="page-actions">
+          <button className="btn btn-secondary" onClick={() => { setBankLines([]); setPairs({}); setIgnored({}); }}>
+            <Upload size={13} /> Nouveau relevé
+          </button>
           <button className="btn btn-secondary" onClick={autoMatch}><RefreshCw size={13} /> Auto-match</button>
         </div>
       </div>
@@ -142,11 +229,17 @@ export default function ReconciliationPage({ factures }) {
             Lignes de relevé
           </div>
           <div style={{ overflowY: "auto", maxHeight: 520 }}>
+            {linesToShow.length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+                Aucune ligne dans ce filtre.
+              </div>
+            )}
             {linesToShow.map(line => {
               const matchedFactureId = pairs[line.id];
               const matchedF = matchedFactureId ? factures.find(f => String(f.id) === String(matchedFactureId)) : null;
               const isIgnored = !!ignored[line.id];
               const isActive = activeLine === line.id;
+              const hasSuggestion = line.matched_to && !matchedF;
               return (
                 <div key={line.id}
                   style={{
@@ -162,6 +255,11 @@ export default function ReconciliationPage({ factures }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 500, marginBottom: 2 }}>{line.libelle}</div>
                       <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{formatDate(line.date)} · <span className="mono">{line.reference}</span></div>
+                      {hasSuggestion && (
+                        <div style={{ fontSize: 11, color: "var(--accent-ink)", marginTop: 3 }}>
+                          ✦ Suggestion IA : {line.matched_label}
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div className="mono tabular" style={{ fontSize: 13, fontWeight: 600, color: line.montant < 0 ? "var(--neg-ink)" : "var(--pos-ink)" }}>
@@ -190,6 +288,14 @@ export default function ReconciliationPage({ factures }) {
                       <span style={{ color: "var(--ink-2)" }}>{matchedF.num_facture}</span>
                       <span className="mono tabular" style={{ marginLeft: "auto" }}>{formatMAD(matchedF.montant_ttc).split(",")[0]}</span>
                       <AmountDiff a={Math.abs(line.montant)} b={matchedF.montant_ttc || 0} />
+                    </div>
+                  )}
+                  {hasSuggestion && !matchedF && (
+                    <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: "2px 10px" }}
+                        onClick={(e) => { e.stopPropagation(); linkPair(line.id, String(line.matched_to)); }}>
+                        Accepter la suggestion
+                      </button>
                     </div>
                   )}
                 </div>

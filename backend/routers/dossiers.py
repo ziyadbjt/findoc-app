@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import get_db
-from models.schemas import Dossier
+from models.schemas import Dossier, PCMCompte
 from routers.auth import get_current_user
 from services.extract_societe import extract_societe
 
@@ -12,6 +14,26 @@ router = APIRouter(prefix="/dossiers", tags=["Dossiers"])
 
 class DossierDeleteResponse(BaseModel):
     message: str
+
+
+class DossierUpdate(BaseModel):
+    exercice_courant: int | None = Field(default=None, ge=2000, le=2100)
+    regime_tva: str | None = None
+
+
+class PCMCompteIn(BaseModel):
+    compte: str
+    libelle: str
+    classe: str | None = None
+
+
+def _normalise_pcm(payload: PCMCompteIn) -> dict:
+    compte = payload.compte.strip()
+    libelle = payload.libelle.strip()
+    classe = (payload.classe or compte[:1]).strip()
+    if not compte or not libelle:
+        raise HTTPException(status_code=400, detail="Compte et libelle requis")
+    return {"compte": compte, "libelle": libelle, "classe": classe}
 
 
 @router.get(
@@ -35,6 +57,7 @@ def create_dossier(
     ville: str = "",
     secteur: str = "",
     regime_tva: str = "debits",
+    exercice_courant: int = None,
     if_number: str = "",
     rc_number: str = "",
     cnss_number: str = "",
@@ -54,6 +77,7 @@ def create_dossier(
         ville=ville,
         secteur=secteur,
         regime_tva=regime_tva,
+        exercice_courant=exercice_courant or datetime.utcnow().year,
         if_number=if_number or None,
         rc_number=rc_number or None,
         cnss_number=cnss_number or None,
@@ -103,6 +127,67 @@ def get_dossier(dossier_id: int, db: Session = Depends(get_db), current_user=Dep
     dossier = db.query(Dossier).filter(Dossier.id == dossier_id).first()
     if not dossier:
         raise HTTPException(status_code=404, detail="Dossier introuvable")
+    return dossier
+
+
+@router.get(
+    "/{dossier_id}/pcm",
+    summary="Lister le plan comptable du dossier",
+    description="Retourne les comptes PCM persistes et utilises par l'analyse IA.",
+)
+def list_pcm(dossier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if not db.query(Dossier.id).filter(Dossier.id == dossier_id).first():
+        raise HTTPException(status_code=404, detail="Dossier introuvable")
+    rows = (
+        db.query(PCMCompte)
+        .filter(PCMCompte.dossier_id == dossier_id)
+        .order_by(PCMCompte.compte.asc())
+        .all()
+    )
+    return [{"id": row.id, "compte": row.compte, "libelle": row.libelle, "classe": row.classe} for row in rows]
+
+
+@router.put(
+    "/{dossier_id}/pcm",
+    summary="Remplacer le plan comptable du dossier",
+    description="Importe ou remplace en bloc les comptes PCM du dossier.",
+)
+def replace_pcm(
+    dossier_id: int,
+    payload: list[PCMCompteIn],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not db.query(Dossier.id).filter(Dossier.id == dossier_id).first():
+        raise HTTPException(status_code=404, detail="Dossier introuvable")
+
+    seen: dict[str, dict] = {}
+    for item in payload:
+        row = _normalise_pcm(item)
+        seen[row["compte"]] = row
+
+    db.query(PCMCompte).filter(PCMCompte.dossier_id == dossier_id).delete()
+    for row in seen.values():
+        db.add(PCMCompte(dossier_id=dossier_id, **row))
+    db.commit()
+    return list_pcm(dossier_id, db, current_user)
+
+
+@router.patch(
+    "/{dossier_id}",
+    summary="Mettre a jour un dossier",
+    description="Met a jour les parametres de travail du dossier, dont l'exercice courant.",
+)
+def update_dossier(dossier_id: int, payload: DossierUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    dossier = db.query(Dossier).filter(Dossier.id == dossier_id).first()
+    if not dossier:
+        raise HTTPException(status_code=404, detail="Dossier introuvable")
+
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(dossier, key, value)
+    db.commit()
+    db.refresh(dossier)
     return dossier
 
 

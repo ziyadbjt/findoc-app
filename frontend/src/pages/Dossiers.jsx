@@ -521,8 +521,17 @@ export default function Dossiers() {
             </button>
           ))}
           {filtered.length === 0 && (
-            <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
-              Aucun dossier trouvé. Cliquez sur "Nouveau dossier" pour commencer.
+            <div style={{ gridColumn: "1 / -1", padding: "56px 24px", textAlign: "center" }}>
+              <div style={{ width: 52, height: 52, borderRadius: 16, background: "var(--accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <Building2 size={22} style={{ color: "var(--accent-ink)" }} />
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Aucun dossier trouvé</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 20 }}>
+                Créez votre premier dossier client ou importez un document de société.
+              </div>
+              <button className="btn btn-primary" onClick={() => {/* trigger new dossier modal */}}>
+                <Plus size={14} /> Nouveau dossier
+              </button>
             </div>
           )}
         </div>

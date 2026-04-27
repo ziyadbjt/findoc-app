@@ -2,12 +2,15 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from models.database import SessionLocal
-from models.schemas import Dossier, Ecriture, Facture, User
+from models.database import SessionLocal, get_db
+from models.schemas import AuditLog, Dossier, Ecriture, Facture, User
+from routers.auth import get_current_user, hash_password
 
 router = APIRouter(tags=["Admin"])
 load_dotenv()
@@ -370,3 +373,156 @@ def admin_dashboard():
     </html>
     """
     return HTMLResponse(html)
+
+
+# ── Audit log endpoints ────────────────────────────────────────────────────────
+
+def log_action(db: Session, user_id: int | None, user_email: str | None, action: str,
+               ressource: str | None = None, ressource_id: int | None = None,
+               details: str | None = None, ip: str | None = None):
+    entry = AuditLog(
+        user_id=user_id,
+        user_email=user_email,
+        action=action,
+        ressource=ressource,
+        ressource_id=ressource_id,
+        details=details,
+        ip=ip,
+    )
+    db.add(entry)
+    db.commit()
+
+
+@router.get(
+    "/admin/audit",
+    summary="Journal d'audit",
+    description="Retourne les dernières actions enregistrées dans le journal d'audit.",
+)
+def get_audit_log(
+    limit: int = 100,
+    ressource: str | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in ("admin", "super"):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    query = db.query(AuditLog).order_by(AuditLog.created_at.desc())
+    if ressource:
+        query = query.filter(AuditLog.ressource == ressource)
+    logs = query.limit(limit).all()
+    return [
+        {
+            "id": l.id,
+            "user_email": l.user_email,
+            "action": l.action,
+            "ressource": l.ressource,
+            "ressource_id": l.ressource_id,
+            "details": l.details,
+            "ip": l.ip,
+            "created_at": l.created_at.isoformat(),
+        }
+        for l in logs
+    ]
+
+
+# ── User management endpoints ──────────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    nom: str
+    role: str = "collab"
+
+
+class UserUpdate(BaseModel):
+    nom: str | None = None
+    role: str | None = None
+    password: str | None = None
+
+
+@router.get(
+    "/admin/users",
+    summary="Lister tous les utilisateurs",
+)
+def list_users(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role not in ("admin", "super"):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [
+        {"id": u.id, "email": u.email, "nom": u.nom, "role": u.role, "created_at": u.created_at.isoformat()}
+        for u in users
+    ]
+
+
+@router.post(
+    "/admin/users",
+    summary="Créer un utilisateur",
+)
+def create_user(
+    payload: UserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in ("admin", "super"):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    if db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Email déjà utilisé")
+    user = User(email=payload.email, hashed_password=hash_password(payload.password), nom=payload.nom, role=payload.role)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    log_action(db, current_user.id, current_user.email, "create_user", "user", user.id,
+               f"email={user.email} role={user.role}", request.client.host if request.client else None)
+    return {"id": user.id, "email": user.email, "nom": user.nom, "role": user.role}
+
+
+@router.patch(
+    "/admin/users/{user_id}",
+    summary="Modifier un utilisateur",
+)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in ("admin", "super"):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if payload.nom is not None:
+        user.nom = payload.nom
+    if payload.role is not None:
+        user.role = payload.role
+    if payload.password:
+        user.hashed_password = hash_password(payload.password)
+    db.commit()
+    log_action(db, current_user.id, current_user.email, "update_user", "user", user_id,
+               f"role={user.role}", request.client.host if request.client else None)
+    return {"id": user.id, "email": user.email, "nom": user.nom, "role": user.role}
+
+
+@router.delete(
+    "/admin/users/{user_id}",
+    summary="Désactiver un utilisateur",
+)
+def delete_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in ("admin", "super"):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    db.delete(user)
+    db.commit()
+    log_action(db, current_user.id, current_user.email, "delete_user", "user", user_id,
+               f"email={user.email}", request.client.host if request.client else None)

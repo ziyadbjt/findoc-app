@@ -41,7 +41,7 @@ export function DossierAvatar({ dossier, size = 28 }) {
 
 export function Sidebar() { return null; }
 
-export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs }) {
+export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs, currentExercise, onChangeExercise }) {
   const nav = [
     { key: "overview",       label: "Aperçu",          icon: <Home size={14} /> },
     { key: "factures",       label: "Factures",         icon: <FileText size={14} />, badge: counts?.factures },
@@ -72,6 +72,14 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
         </span>
         <ChevronsUpDown size={13} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
       </button>
+      <label className="topnav-exercise">
+        <span>Exercice</span>
+        <select value={currentExercise || new Date().getFullYear()} onChange={(event) => onChangeExercise?.(Number(event.target.value))}>
+          {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() + 2 - index).map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+      </label>
 
       {/* Nav links */}
       <nav className="topnav-links">
@@ -130,13 +138,18 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   const items = useMemo(() => [
     { group: "Navigation", label: "Apercu", icon: <Home size={14} />, action: () => onNavigate("overview"), kbd: "G O" },
     { group: "Navigation", label: "Factures", icon: <FileText size={14} />, action: () => onNavigate("factures"), kbd: "G F" },
-    { group: "Navigation", label: "Relances", icon: <Mail size={14} />, action: () => onNavigate("relances") },
-    { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers") },
-    { group: "Navigation", label: "Declaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva") },
+    { group: "Navigation", label: "Relances", icon: <Mail size={14} />, action: () => onNavigate("relances"), kbd: "G R" },
+    { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers"), kbd: "G T" },
+    { group: "Navigation", label: "Declaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva"), kbd: "G V" },
+    { group: "Navigation", label: "Tresorerie", icon: <Home size={14} />, action: () => onNavigate("treso"), kbd: "G C" },
+    { group: "Navigation", label: "Reconciliation", icon: <Building2 size={14} />, action: () => onNavigate("reconciliation"), kbd: "G B" },
     { group: "Navigation", label: "Audit", icon: <ShieldCheck size={14} />, action: () => onNavigate("audit") },
-    { group: "Actions", label: "Importer", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
-    { group: "Actions", label: "Exporter", icon: <Download size={14} />, action: onExport },
+    { group: "Actions", label: "Importer des factures", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
+    { group: "Actions", label: "Exporter journal SAGE", icon: <Download size={14} />, action: onExport, kbd: "E" },
     { group: "Actions", label: "Generer une relance", icon: <Send size={14} />, action: () => onNavigate("relances") },
+    { group: "Aide", label: "Raccourcis clavier — Ctrl+K pour ouvrir", icon: <ShieldCheck size={14} />, action: () => {}, kbd: "?" },
+    { group: "Aide", label: "G + lettre = navigation rapide", icon: <ShieldCheck size={14} />, action: () => {} },
+    { group: "Aide", label: "Echap = fermer la palette", icon: <ShieldCheck size={14} />, action: () => {} },
   ], [onNavigate, onUpload, onExport]);
 
   const filtered = useMemo(() => {

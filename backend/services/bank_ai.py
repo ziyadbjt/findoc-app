@@ -4,55 +4,13 @@ import re
 from datetime import datetime
 from typing import Any
 
-from services.document_ai import (
-    DEFAULT_LOCATION,
-    _entity_value,
-    _normalise_date,
-    _run_processor,
-    _safe_confidence,
-    _text_anchor_to_string,
-    _to_float,
-)
+from services.document_ai import _normalise_date, _to_float
 
 
 def _guess_mime_type(filename: str) -> str:
     mime_type, _ = mimetypes.guess_type(filename)
     return mime_type or "application/pdf"
 
-
-def _extract_transactions(document) -> list[dict[str, Any]]:
-    transactions: list[dict[str, Any]] = []
-    for entity in getattr(document, "entities", []):
-        entity_type = entity.type_.lower()
-        if "transaction" not in entity_type and entity_type not in {"line_item"}:
-            continue
-        row = {
-            "date": None,
-            "libelle": _entity_value(document, entity),
-            "montant": None,
-            "solde": None,
-            "type": None,
-            "confidence": _safe_confidence(entity.confidence),
-        }
-        for child in getattr(entity, "properties", []):
-            child_type = child.type_.lower()
-            value = _entity_value(document, child)
-            if "date" in child_type:
-                row["date"] = _normalise_date(value)
-            elif any(token in child_type for token in ["description", "libelle", "narration"]):
-                row["libelle"] = value
-            elif any(token in child_type for token in ["amount", "montant"]):
-                row["montant"] = _to_float(value)
-            elif "balance" in child_type or "solde" in child_type:
-                row["solde"] = _to_float(value)
-            elif "debit_credit" in child_type or child_type.endswith("type"):
-                row["type"] = value.lower()
-        if row["montant"] is None:
-            continue
-        if row["type"] is None:
-            row["type"] = "credit" if row["montant"] >= 0 else "debit"
-        transactions.append(row)
-    return transactions
 
 
 def _fallback_transactions(file_bytes: bytes) -> list[dict[str, Any]]:
@@ -84,19 +42,9 @@ def extract_bank_statement(filepath: str, filename: str) -> dict[str, Any]:
     with open(filepath, "rb") as handle:
         file_bytes = handle.read()
 
-    mime_type = _guess_mime_type(filename)
-    processor_id = os.getenv("GOOGLE_PROCESSOR_ID_BANK")
-    location = os.getenv("GOOGLE_PROCESSOR_LOCATION_BANK", DEFAULT_LOCATION)
-
-    try:
-        document = _run_processor(file_bytes, mime_type, processor_id, location)
-        transactions = _extract_transactions(document)
-        source = "google_document_ai"
-        raw_text = getattr(document, "text", "")[:12000]
-    except Exception as exc:
-        transactions = _fallback_transactions(file_bytes)
-        source = "fallback"
-        raw_text = str(exc)
+    transactions = _fallback_transactions(file_bytes)
+    source = "fallback"
+    raw_text = ""
 
     for index, row in enumerate(transactions, start=1):
         row["id"] = f"txn-{index}"

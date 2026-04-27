@@ -13,8 +13,8 @@ const readTVAConfig = (dossier) => {
     return {
       regime_tva: dossier?.regime_tva || "debits",
       default_rate: 20,
-      enable_tpe: true,
-      enable_bank: true,
+      enable_tpe: false,
+      enable_bank: false,
       cmi_base_ht: 12500,
       cmi_rate: 20,
       bank_base_ht: 6400,
@@ -25,8 +25,8 @@ const readTVAConfig = (dossier) => {
     return {
       regime_tva: dossier?.regime_tva || "debits",
       default_rate: 20,
-      enable_tpe: true,
-      enable_bank: true,
+      enable_tpe: false,
+      enable_bank: false,
       cmi_base_ht: 12500,
       cmi_rate: 20,
       bank_base_ht: 6400,
@@ -35,7 +35,7 @@ const readTVAConfig = (dossier) => {
   }
 };
 
-export default function TVAPage({ factures, dossier }) {
+export default function TVAPage({ factures, dossier, currentExercise }) {
   const toast = useToast();
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -53,6 +53,7 @@ export default function TVAPage({ factures, dossier }) {
     const months = new Set();
     const quarters = new Set([currentQuarter]);
     (factures || []).forEach((f) => {
+      if (currentExercise && Number(f.exercice_rattachement || String(f.date_facture || "").slice(0, 4)) !== Number(currentExercise)) return;
       if (!f?.date_facture) return;
       const date = new Date(f.date_facture);
       if (Number.isNaN(date.getTime())) return;
@@ -64,7 +65,7 @@ export default function TVAPage({ factures, dossier }) {
       months: [...months].sort().reverse(),
       quarters: [...quarters].sort((a, b) => b.localeCompare(a)),
     };
-  }, [factures, currentMonth, currentQuarter]);
+  }, [factures, currentMonth, currentQuarter, currentExercise]);
 
   useEffect(() => {
     const options = mode === "quarter" ? facturePeriods.quarters : facturePeriods.months;
@@ -75,6 +76,7 @@ export default function TVAPage({ factures, dossier }) {
 
   const filteredFactures = useMemo(() => {
     return (factures || []).filter((f) => {
+      if (currentExercise && Number(f.exercice_rattachement || String(f.date_facture || "").slice(0, 4)) !== Number(currentExercise)) return false;
       if (!f?.date_facture) return mode === "quarter" ? selectedPeriod === currentQuarter : selectedPeriod === currentMonth;
       const date = new Date(f.date_facture);
       if (Number.isNaN(date.getTime())) return false;
@@ -83,9 +85,9 @@ export default function TVAPage({ factures, dossier }) {
       }
       return `Q${getQuarter(date.getMonth())}-${date.getFullYear()}` === selectedPeriod;
     });
-  }, [factures, mode, selectedPeriod, currentQuarter, currentMonth]);
+  }, [factures, mode, selectedPeriod, currentQuarter, currentMonth, currentExercise]);
 
-  const achats = filteredFactures.filter((f) => f.type === "achat");
+  const achats = filteredFactures.filter((f) => (f.type || "achat") === "achat");
   const ventes = filteredFactures.filter((f) => f.type === "vente");
 
   const rows = [
@@ -133,7 +135,7 @@ export default function TVAPage({ factures, dossier }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Déclaration TVA</h1>
-          <p className="page-subtitle">{dossier?.raison_sociale || "Dossier"} · régime {config.regime_tva === "encaissements" ? "encaissements" : "débits"}</p>
+          <p className="page-subtitle">{dossier?.raison_sociale || "Dossier"} · exercice {currentExercise || "courant"} · régime {config.regime_tva === "encaissements" ? "encaissements" : "débits"}</p>
         </div>
         <div className="page-actions" style={{ gap: 8 }}>
           <div className="segmented">
