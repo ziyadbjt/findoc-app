@@ -1,18 +1,19 @@
 import base64
+import io
 import json
+import logging
 import mimetypes
 import os
 import re
 from datetime import datetime, timedelta
 from typing import Any
 
-from google.api_core.client_options import ClientOptions
-from google.cloud import documentai
+import anthropic
+import pdfplumber
 
 from services.claude import enrich_facture_metier
 
-
-DEFAULT_LOCATION = os.getenv("GOOGLE_PROCESSOR_LOCATION", "eu")
+logger = logging.getLogger(__name__)
 
 
 def _guess_mime_type(filename: str) -> str:
@@ -40,7 +41,7 @@ def _to_float(value: Any) -> float | None:
     cleaned = str(value).strip()
     if not cleaned:
         return None
-    cleaned = cleaned.replace("\u00a0", "").replace("MAD", "").replace("DHS", "")
+    cleaned = cleaned.replace(" ", "").replace("MAD", "").replace("DHS", "")
     cleaned = cleaned.replace(" ", "")
     if "," in cleaned and "." in cleaned:
         cleaned = cleaned.replace(".", "").replace(",", ".")
@@ -53,98 +54,132 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
-def _text_anchor_to_string(document: documentai.Document, text_anchor: Any) -> str:
-    if not text_anchor or not getattr(text_anchor, "text_segments", None):
-        return ""
-    response = []
-    for segment in text_anchor.text_segments:
-        start = int(segment.start_index or 0)
-        end = int(segment.end_index or 0)
-        response.append(document.text[start:end])
-    return "".join(response).strip()
-
-
-def _entity_value(document: documentai.Document, entity: Any) -> str:
-    return (getattr(entity, "mention_text", None) or _text_anchor_to_string(document, entity.text_anchor)).strip()
-
-
-def _safe_confidence(value: Any, default: float = 0.75) -> float:
+def _extract_text_from_pdf(file_bytes: bytes) -> str:
     try:
-        return round(float(value), 3)
-    except (TypeError, ValueError):
-        return default
+        pages = []
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    pages.append(text)
+        return "\n".join(pages)[:8000]
+    except Exception:
+        return ""
 
 
-def _build_client(location: str) -> documentai.DocumentProcessorServiceClient:
-    endpoint = f"{location}-documentai.googleapis.com"
-    return documentai.DocumentProcessorServiceClient(client_options=ClientOptions(api_endpoint=endpoint))
+def _parse_claude_json(raw: str) -> dict[str, Any]:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    return json.loads(cleaned)
 
 
-def _run_processor(file_bytes: bytes, mime_type: str, processor_id: str, location: str) -> documentai.Document:
-    project_id = os.getenv("GOOGLE_PROJECT_ID")
-    if not project_id or not processor_id:
-        raise ValueError("Google Document AI n'est pas configure")
+def _invoice_prompt(filename: str, text: str = "") -> str:
+    text_hint = f"\nTexte OCR/PDF disponible:\n{text[:6000]}\n" if text else ""
+    return f"""Tu es un expert-comptable marocain et tu lis directement une facture.
+Analyse le document visuellement, y compris tableaux, cachets, notes, libelles et petites lignes.
 
-    client = _build_client(location)
-    name = client.processor_path(project_id, location, processor_id)
-    request = documentai.ProcessRequest(
-        name=name,
-        raw_document=documentai.RawDocument(content=file_bytes, mime_type=mime_type),
-    )
-    result = client.process_document(request=request)
-    return result.document
+Retourne UNIQUEMENT un objet JSON valide, sans texte avant ou apres.
+
+Champs attendus:
+- fournisseur: nom du fournisseur/emetteur (string ou null)
+- num_facture: numero de facture (string ou null)
+- date_facture: date au format YYYY-MM-DD (string ou null)
+- date_echeance: date d'echeance au format YYYY-MM-DD (string ou null)
+- paiement: "a_rapprocher" par defaut, sauf si un rapprochement bancaire confirme deja le paiement
+- date_paiement: date du paiement au format YYYY-MM-DD si visible (string ou null)
+- montant_ht: montant hors taxes en nombre decimal (number ou null)
+- tva: montant TVA en nombre decimal (number ou null)
+- montant_ttc: montant TTC en nombre decimal (number ou null)
+- type: "achat" ou "vente" selon le sens comptable pour le dossier
+- line_items: liste des lignes [{{"description": "", "quantity": null, "unit_price": null, "amount": null}}]
+- exercice_rattachement: annee comptable la plus probable (number ou null)
+- traitement_comptable: "exercice_courant", "charge_constatee_avance", "produit_constate_avance", "rattachement_exercice_precedent" ou "a_verifier"
+- niveau_risque: "faible", "moyen" ou "eleve"
+- commentaire_analyse: explication courte, surtout si le libelle mentionne un autre exercice
+- texte_source: court resume des indices lus dans la facture
+
+Important:
+- Si la facture est datee N mais concerne une prestation N+1, propose charge/produit constate d'avance.
+- Si elle concerne N-1, propose rattachement exercice precedent.
+- Les mentions "paye", "total paye", "montant paye", "regle", "acquitte", "Mastercard" ou "Visa" sont des indices seulement.
+- Ne conclus jamais que la facture est payee depuis le document seul: le paiement doit rester "a_rapprocher" tant qu'il n'est pas confirme par rapprochement bancaire.
+- N'utilise pas une mention de paiement pour remplacer la date d'echeance.
+- Ne devine pas un montant si tu ne le lis pas clairement: mets null.
+
+Nom du fichier: {filename}
+{text_hint}
+JSON:"""
 
 
-def _extract_invoice_entities(document: documentai.Document) -> dict[str, Any]:
-    entity_map: dict[str, list[Any]] = {}
-    for entity in document.entities:
-        entity_map.setdefault(entity.type_.lower(), []).append(entity)
-
-    def pick(*keys: str) -> Any:
-        for key in keys:
-            matches = entity_map.get(key.lower()) or []
-            if matches:
-                return matches[0]
+def _extract_with_claude_vision(file_bytes: bytes, filename: str, mime_type: str, text_hint: str = "") -> dict[str, Any] | None:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    if len(file_bytes) > 30 * 1024 * 1024:
         return None
 
-    line_items: list[dict[str, Any]] = []
-    for item in entity_map.get("line_item", []):
-        row = {"description": _entity_value(document, item), "quantity": None, "unit_price": None, "amount": None}
-        for child in getattr(item, "properties", []):
-            child_type = child.type_.lower()
-            if child_type in {"description", "line_item/description"}:
-                row["description"] = _entity_value(document, child)
-            elif child_type in {"quantity", "line_item/quantity"}:
-                row["quantity"] = _to_float(_entity_value(document, child))
-            elif child_type in {"unit_price", "line_item/unit_price", "amount"}:
-                value = _to_float(_entity_value(document, child))
-                if child_type.endswith("unit_price"):
-                    row["unit_price"] = value
-                else:
-                    row["amount"] = value
-        line_items.append(row)
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        document_base64 = base64.standard_b64encode(file_bytes).decode("utf-8")
+        if mime_type == "application/pdf":
+            media_block = {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": document_base64,
+                },
+            }
+        elif mime_type.startswith("image/"):
+            media_block = {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": document_base64,
+                },
+            }
+        else:
+            return None
 
-    fournisseur = _entity_value(document, pick("supplier_name", "vendor_name", "invoice_supplier_name"))
-    numero = _entity_value(document, pick("invoice_id", "invoice_number"))
-    date_facture = _normalise_date(_entity_value(document, pick("invoice_date", "date")))
-    date_echeance = _normalise_date(_entity_value(document, pick("due_date", "payment_due_date")))
-    montant_ht = _to_float(_entity_value(document, pick("net_amount", "subtotal_amount")))
-    tva = _to_float(_entity_value(document, pick("tax_amount", "total_tax_amount")))
-    montant_ttc = _to_float(_entity_value(document, pick("total_amount", "amount_due")))
-    confidence = max((_safe_confidence(entity.confidence) for entity in document.entities), default=0.75)
-
-    return {
-        "fournisseur": fournisseur,
-        "num_facture": numero,
-        "date_facture": date_facture,
-        "date_echeance": date_echeance,
-        "montant_ht": montant_ht,
-        "tva": tva,
-        "montant_ttc": montant_ttc,
-        "line_items": [item for item in line_items if item.get("description") or item.get("amount")],
-        "confiance_ocr": round(confidence, 3),
-        "texte_source": document.text[:12000],
-    }
+        message = client.messages.create(
+            model=os.getenv("ANTHROPIC_VISION_MODEL") or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=1600,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        media_block,
+                        {"type": "text", "text": _invoice_prompt(filename, text_hint)},
+                    ],
+                }
+            ],
+        )
+        data = _parse_claude_json(message.content[0].text)
+        return {
+            "fournisseur": data.get("fournisseur") or "",
+            "num_facture": data.get("num_facture") or "",
+            "date_facture": _normalise_date(data.get("date_facture")),
+            "date_echeance": _normalise_date(data.get("date_echeance")),
+            "paiement": data.get("paiement") or None,
+            "date_paiement": _normalise_date(data.get("date_paiement")),
+            "montant_ht": _to_float(data.get("montant_ht")),
+            "tva": _to_float(data.get("tva")),
+            "montant_ttc": _to_float(data.get("montant_ttc")),
+            "type": data.get("type") or "achat",
+            "line_items": data.get("line_items") or [],
+            "exercice_rattachement": data.get("exercice_rattachement"),
+            "traitement_comptable": data.get("traitement_comptable"),
+            "niveau_risque": data.get("niveau_risque"),
+            "commentaire_analyse": data.get("commentaire_analyse"),
+            "confiance_ocr": 0.92,
+            "texte_source": data.get("texte_source") or text_hint[:6000],
+        }
+    except Exception:
+        logger.exception("Claude Vision extraction failed")
+        return None
 
 
 def _fallback_extract_facture(filename: str, file_bytes: bytes) -> dict[str, Any]:
@@ -172,7 +207,7 @@ def _fallback_extract_facture(filename: str, file_bytes: bytes) -> dict[str, Any
         "fournisseur": os.path.splitext(filename)[0].replace("_", " ").upper(),
         "num_facture": os.path.splitext(filename)[0],
         "date_facture": today.isoformat(),
-        "date_echeance": (today + timedelta(days=30)).isoformat(),
+        "date_echeance": (today + timedelta(days=60)).isoformat(),
         "montant_ht": montant_ht,
         "tva": tva,
         "montant_ttc": montant_ttc,
@@ -200,25 +235,22 @@ def _ensure_totals(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def extract_facture(filepath: str, filename: str) -> dict[str, Any]:
+def extract_facture(filepath: str, filename: str, dossier_id: int | None = None) -> dict[str, Any]:
     with open(filepath, "rb") as handle:
         file_bytes = handle.read()
 
     mime_type = _guess_mime_type(filename)
-    processor_id = os.getenv("GOOGLE_PROCESSOR_ID_INVOICE")
-    location = os.getenv("GOOGLE_PROCESSOR_LOCATION_INVOICE", DEFAULT_LOCATION)
+    text = _extract_text_from_pdf(file_bytes) if mime_type == "application/pdf" else ""
+    invoice_data = _extract_with_claude_vision(file_bytes, filename, mime_type, text)
 
-    try:
-        document = _run_processor(file_bytes, mime_type, processor_id, location)
-        invoice_data = _extract_invoice_entities(document)
-        provider = "google_document_ai"
-    except Exception as exc:
+    if invoice_data:
+        provider = "claude_vision"
+    else:
         invoice_data = _fallback_extract_facture(filename, file_bytes)
-        invoice_data["warning"] = str(exc)
         provider = "fallback"
 
     invoice_data = _ensure_totals(invoice_data)
-    enriched = enrich_facture_metier(invoice_data)
+    enriched = enrich_facture_metier(invoice_data, dossier_id)
 
     response = {
         **invoice_data,
@@ -227,9 +259,14 @@ def extract_facture(filepath: str, filename: str) -> dict[str, Any]:
         "document_base64_preview": base64.b64encode(file_bytes[:256]).decode("ascii"),
     }
     response["date_facture"] = _normalise_date(response.get("date_facture")) or datetime.utcnow().date().isoformat()
+    if str(response.get("paiement") or "").lower() in {"payee", "payée", "paye", "paid"}:
+        response["commentaire_analyse"] = (
+            f"{response.get('commentaire_analyse') or ''} Paiement indique par le document, a confirmer par rapprochement bancaire."
+        ).strip()
+    response["paiement"] = "a_rapprocher"
     if not response.get("date_echeance"):
         response["date_echeance"] = (
-            datetime.strptime(response["date_facture"], "%Y-%m-%d").date() + timedelta(days=30)
+            datetime.strptime(response["date_facture"], "%Y-%m-%d").date() + timedelta(days=60)
         ).isoformat()
     response["confidence"] = round(
         max(float(response.get("confiance_ocr", 0.0)), float(response.get("confiance_metier", 0.0))), 3
@@ -240,9 +277,16 @@ def extract_facture(filepath: str, filename: str) -> dict[str, Any]:
             "num_facture": response.get("num_facture"),
             "date_facture": response.get("date_facture"),
             "date_echeance": response.get("date_echeance"),
+            "paiement": response.get("paiement"),
+            "date_paiement": response.get("date_paiement"),
             "montant_ht": response.get("montant_ht"),
             "tva": response.get("tva"),
             "montant_ttc": response.get("montant_ttc"),
+            "type": response.get("type"),
+            "exercice_rattachement": response.get("exercice_rattachement"),
+            "traitement_comptable": response.get("traitement_comptable"),
+            "niveau_risque": response.get("niveau_risque"),
+            "commentaire_analyse": response.get("commentaire_analyse"),
             "line_items": response.get("line_items", []),
         },
         ensure_ascii=True,

@@ -40,6 +40,10 @@ export function enrichFacture(f) {
     confidence: 0.95,
     categorie: "—",
     compte_pcm: "",
+    exercice_rattachement: f.date_facture ? Number(String(f.date_facture).slice(0, 4)) : null,
+    traitement_comptable: "exercice_courant",
+    validation_status: "a_valider",
+    analyse_ai: "",
     notes: "",
   };
   return { ...defaults, ...f };

@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
 import { uploadBankStatement, uploadFactures } from "../api";
@@ -15,6 +16,8 @@ const TABS = [
   { key: "banque", label: "Banque" },
   { key: "tpe", label: "TPE" },
 ];
+
+const buildTpeStorageKey = (dossierId) => `tpe-transactions:${dossierId || "demo"}`;
 
 
 function StatutBadge({ statut }) {
@@ -262,12 +265,157 @@ function BanqueTab({ factures, dossierId }) {
 }
 
 
-function TPETab() {
+function TPETab({ dossierId, transactions, setTransactions, onExport }) {
+  const toast = useToast();
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const totals = useMemo(() => ({
+    count: transactions.length,
+    amount: transactions.reduce((sum, row) => sum + (Number(row.montant) || 0), 0),
+    settled: transactions.filter((row) => (row.statut || "").toLowerCase() === "valide").length,
+  }), [transactions]);
+
+  const parseCsv = (text) => {
+    const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+    if (!headerLine) return [];
+    const headers = headerLine.split(/[;,]/).map((item) => item.trim().toLowerCase());
+    return lines.map((line, index) => {
+      const values = line.split(/[;,]/);
+      const row = Object.fromEntries(headers.map((header, i) => [header, values[i]?.trim() || ""]));
+      return {
+        id: `tpe-${Date.now()}-${index}`,
+        date: row.date || row.transaction_date || row.created_at || "",
+        reference: row.reference || row.ref || row.operation || `TPE-${index + 1}`,
+        libelle: row.libelle || row.label || row.description || "Encaissement TPE",
+        client: row.client || row.customer || "",
+        terminal: row.terminal || row.tpe || "",
+        canal: row.canal || "TPE",
+        statut: row.statut || row.status || "valide",
+        montant: Number(String(row.montant || row.amount || 0).replace(",", ".")) || 0,
+        tva: Number(String(row.tva || 0).replace(",", ".")) || 0,
+        montant_ht: Number(String(row.montant_ht || row.ht || row.amount_ht || 0).replace(",", ".")) || 0,
+        compte_pcm: row.compte_pcm || "511100",
+      };
+    }).filter((row) => row.date || row.reference || row.montant);
+  };
+
+  const normalizeJsonRows = (rows) =>
+    (rows || []).map((row, index) => ({
+      id: row.id || `tpe-${Date.now()}-${index}`,
+      date: row.date || row.transaction_date || row.created_at || "",
+      reference: row.reference || row.ref || row.operation || `TPE-${index + 1}`,
+      libelle: row.libelle || row.label || row.description || "Encaissement TPE",
+      client: row.client || row.customer || "",
+      terminal: row.terminal || row.tpe || "",
+      canal: row.canal || "TPE",
+      statut: row.statut || row.status || "valide",
+      montant: Number(row.montant ?? row.amount ?? 0) || 0,
+      tva: Number(row.tva ?? 0) || 0,
+      montant_ht: Number(row.montant_ht ?? row.ht ?? row.amount_ht ?? 0) || 0,
+      compte_pcm: row.compte_pcm || "511100",
+    })).filter((row) => row.date || row.reference || row.montant);
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      let rows = [];
+      if (file.name.toLowerCase().endsWith(".json")) {
+        rows = normalizeJsonRows(JSON.parse(await file.text()));
+      } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = normalizeJsonRows(XLSX.utils.sheet_to_json(sheet, { defval: "" }));
+      } else {
+        rows = parseCsv(await file.text());
+      }
+
+      if (!rows.length) {
+        toast("Aucune transaction TPE exploitable trouvee", "neg");
+      } else {
+        setTransactions(rows);
+        toast(`${rows.length} transaction(s) TPE importee(s)`, "pos");
+      }
+    } catch {
+      toast("Erreur import TPE", "neg");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  };
+
   return (
-    <div className="card" style={{ padding: 40, textAlign: "center" }}>
-      <div style={{ fontSize: 28, marginBottom: 12 }}>TPE</div>
-      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Terminal de paiement electronique</div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Connectez votre TPE pour importer automatiquement les transactions.</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="card" style={{ padding: "14px 18px" }}>
+        <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Terminal de paiement electronique</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+              Importez vos remises TPE depuis CSV, JSON ou Excel puis exportez le journal correspondant.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ textAlign: "center", minWidth: 74 }}>
+              <div style={{ fontSize: 20, fontWeight: 600 }}>{totals.count}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Transactions</div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 110 }}>
+              <div className="mono tabular" style={{ fontSize: 20, fontWeight: 600 }}>{formatMAD(totals.amount).split(",")[0]}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Montant total</div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 74 }}>
+              <div style={{ fontSize: 20, fontWeight: 600, color: "var(--pos-ink)" }}>{totals.settled}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-2)" }}>Validées</div>
+            </div>
+            <button className="btn btn-secondary" onClick={onExport}>
+              <Download size={13} /> Exporter
+            </button>
+            <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              <Upload size={13} /> {uploading ? "Import..." : "Importer"}
+            </button>
+            <input ref={fileRef} type="file" accept=".csv,.json,.xlsx,.xls" style={{ display: "none" }} onChange={handleImport} />
+          </div>
+        </div>
+      </div>
+
+      {transactions.length === 0 ? (
+        <div className="card" style={{ padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucune transaction TPE importee</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+            Chargez un export de terminal ou un relevé de remises pour alimenter ce journal.
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th className="th">Date</th>
+                <th className="th">Reference</th>
+                <th className="th">Libelle</th>
+                <th className="th">Terminal</th>
+                <th className="th">Statut</th>
+                <th className="th right">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((row) => (
+                <tr key={row.id} className="tr-hover">
+                  <td className="td">{row.date ? formatDateShort(row.date) : "—"}</td>
+                  <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{row.reference || "—"}</td>
+                  <td className="td" style={{ fontWeight: 500 }}>{row.libelle || row.client || "Transaction TPE"}</td>
+                  <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{row.terminal || "—"}</td>
+                  <td className="td"><span className={`badge ${(row.statut || "").toLowerCase() === "valide" ? "pos" : "warn"}`}>{row.statut || "valide"}</span></td>
+                  <td className="td right tabular" style={{ fontWeight: 600, color: "var(--pos-ink)" }}>{formatMAD(row.montant || 0).split(",")[0]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,7 +435,20 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
+  const [tpeTransactions, setTpeTransactions] = useState([]);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      setTpeTransactions(JSON.parse(localStorage.getItem(buildTpeStorageKey(dossierId)) || "[]"));
+    } catch {
+      setTpeTransactions([]);
+    }
+  }, [dossierId]);
+
+  useEffect(() => {
+    localStorage.setItem(buildTpeStorageKey(dossierId), JSON.stringify(tpeTransactions));
+  }, [dossierId, tpeTransactions]);
 
   const tabFactures = factures.filter((facture) => (tab === "achats" ? (facture.type || "achat") === "achat" : tab === "ventes" ? facture.type === "vente" : true));
 
@@ -327,7 +488,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const handleDrop = useCallback((event) => {
     event.preventDefault();
     setDragging(false);
-    setUploadFiles([...event.dataTransfer.files].filter((file) => file.type === "application/pdf"));
+    setUploadFiles([...event.dataTransfer.files].filter((file) => file.type === "application/pdf" || file.type.startsWith("image/")));
   }, []);
 
   const handleUpload = async () => {
@@ -347,6 +508,11 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   };
 
   const totalTTC = filtered.reduce((sum, facture) => sum + (facture.montant_ttc || 0), 0);
+  const lowConfidenceFactures = useMemo(
+    () => factures.filter(f => f.confidence != null && f.confidence < 0.8 && f.statut !== "erreur"),
+    [factures]
+  );
+  const [showBatchValidation, setShowBatchValidation] = useState(false);
 
   return (
     <div className="page-inner">
@@ -361,6 +527,59 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         </div>
       </div>
 
+      {lowConfidenceFactures.length > 0 && (
+        <div style={{
+          background: "var(--warn-bg)", borderRadius: 10, padding: "12px 16px",
+          marginBottom: 14, display: "flex", alignItems: "center", gap: 12,
+          border: "1px solid color-mix(in srgb, var(--warn-ink) 25%, transparent)"
+        }}>
+          <Sparkles size={15} style={{ color: "var(--warn-ink)", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--warn-ink)" }}>
+              {lowConfidenceFactures.length} facture{lowConfidenceFactures.length > 1 ? "s" : ""} à valider
+            </span>
+            <span style={{ fontSize: 12, color: "var(--ink-2)", marginLeft: 8 }}>
+              Confiance d'extraction &lt; 80% — vérifiez les montants extraits
+            </span>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 12 }}
+            onClick={() => setShowBatchValidation(v => !v)}
+          >
+            {showBatchValidation ? "Masquer" : "Voir toutes"}
+          </button>
+        </div>
+      )}
+
+      {showBatchValidation && lowConfidenceFactures.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", fontSize: 12.5, fontWeight: 500 }}>
+            Factures à confiance faible
+          </div>
+          {lowConfidenceFactures.map(f => (
+            <div key={f.id}
+              style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+              onClick={() => setSelected(f)}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{f.fournisseur || "—"}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{f.num_facture} · {formatDate(f.date_facture)}</div>
+              </div>
+              <div className="mono tabular" style={{ fontSize: 13, fontWeight: 600 }}>{formatMAD(f.montant_ttc).split(",")[0]}</div>
+              <span style={{
+                fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 600,
+                background: "var(--warn-bg)", color: "var(--warn-ink)",
+                border: "1px solid color-mix(in srgb, var(--warn-ink) 20%, transparent)"
+              }}>
+                {Math.round((f.confidence || 0) * 100)}% confiance
+              </span>
+              <ChevronRight size={14} style={{ color: "var(--ink-3)" }} />
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--line-0)", paddingBottom: 0 }}>
         {TABS.map((tabItem) => (
           <button
@@ -374,7 +593,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       </div>
 
       {tab === "banque" && <BanqueTab factures={factures} dossierId={dossierId} />}
-      {tab === "tpe" && <TPETab />}
+      {tab === "tpe" && <TPETab dossierId={dossierId} transactions={tpeTransactions} setTransactions={setTpeTransactions} onExport={() => setShowExport(true)} />}
 
       {(tab === "achats" || tab === "ventes") && (
         <>
@@ -417,6 +636,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                     <Th col="num_facture">Numero Facture</Th>
                     <Th col="date_facture">Date</Th>
                     <Th col="date_echeance">Echeance</Th>
+                    <Th col="exercice_rattachement">Exercice</Th>
                     <Th col="code_tiers">Code tiers</Th>
                     <Th col="montant_ht" right>HT</Th>
                     <Th col="tva" right>TVA</Th>
@@ -426,13 +646,16 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--ink-3)", fontSize: 13 }}>Aucune facture</td></tr>}
+                  {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--ink-3)", fontSize: 13 }}>Aucune facture</td></tr>}
                   {filtered.map((facture) => (
                     <tr key={facture.id} className="tr-hover" onClick={() => setSelected(facture)} style={{ cursor: "pointer" }}>
                       <td className="td" style={{ fontWeight: 500 }}>{facture.fournisseur || "-"}</td>
                       <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{facture.num_facture || "-"}</td>
                       <td className="td">{formatDateShort(facture.date_facture)}</td>
                       <td className="td" style={{ color: facture.paiement === "en_retard" ? "var(--neg-ink)" : undefined }}>{formatDateShort(facture.date_echeance)}</td>
+                      <td className="td mono" style={{ fontSize: 11, color: facture.traitement_comptable && facture.traitement_comptable !== "exercice_courant" ? "var(--warn-ink)" : "var(--ink-2)" }}>
+                        {facture.exercice_rattachement || (facture.date_facture || "").slice(0, 4) || "-"}
+                      </td>
                       <td className="td mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{facture.code_tiers || "-"}</td>
                       <td className="td right tabular">{formatMAD(facture.montant_ht).split(",")[0]}</td>
                       <td className="td right tabular" style={{ color: "var(--ink-2)" }}>{formatMAD(facture.tva).split(",")[0]}</td>
@@ -445,7 +668,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                 {filtered.length > 0 && (
                   <tfoot>
                     <tr style={{ borderTop: "1px solid var(--line-1)", background: "var(--bg-inset)" }}>
-                      <td colSpan={5} className="td" style={{ fontWeight: 500, fontSize: 12 }}>Total · {filtered.length} factures</td>
+                      <td colSpan={6} className="td" style={{ fontWeight: 500, fontSize: 12 }}>Total · {filtered.length} factures</td>
                       <td className="td right tabular" style={{ fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.montant_ht || 0), 0)).split(",")[0]}</td>
                       <td className="td right tabular" style={{ color: "var(--ink-2)", fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.tva || 0), 0)).split(",")[0]}</td>
                       <td className="td right tabular" style={{ fontWeight: 600 }}>{formatMAD(totalTTC).split(",")[0]}</td>
@@ -470,9 +693,9 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
             <div className="modal-body">
               <div className={`dropzone${dragging ? " drag-over" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
                 <div className="dropzone-icon"><Upload size={20} /></div>
-                <div className="dropzone-title">Glissez vos PDFs ici</div>
-                <div className="dropzone-sub">ou cliquez · PDF uniquement</div>
-                <input ref={fileRef} type="file" multiple accept=".pdf" style={{ display: "none" }} onChange={(event) => setUploadFiles([...event.target.files])} />
+                <div className="dropzone-title">Glissez vos factures ici</div>
+                <div className="dropzone-sub">PDF, PNG ou JPG · analyse Claude Vision</div>
+                <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: "none" }} onChange={(event) => setUploadFiles([...event.target.files])} />
               </div>
               {uploadFiles.length > 0 && (
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -502,11 +725,21 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         dossierId={dossierId}
         factures={factures}
         ecritures={ecritures}
+        tpeTransactions={tpeTransactions}
         defaultJournal={tab}
       />
 
       {selected && (
-        <FactureDetail facture={selected} ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)} onClose={() => setSelected(null)} onUpdate={() => { setSelected(null); onRefresh(); }} dossierId={dossierId} />
+        <FactureDetail
+          facture={selected}
+          ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)}
+          onClose={() => setSelected(null)}
+          onUpdate={(next) => {
+            setSelected(next);
+            onRefresh();
+          }}
+          dossierId={dossierId}
+        />
       )}
     </div>
   );

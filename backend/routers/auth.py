@@ -1,8 +1,11 @@
 import os
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -12,11 +15,29 @@ from sqlalchemy.orm import Session
 from models.database import get_db
 from models.schemas import User
 
-load_dotenv()
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_DIR / ".env")
+load_dotenv(_BACKEND_DIR.parent / ".env")
+
+# Simple in-memory rate limiter: max 10 login attempts per IP per 60s
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_RATE_WINDOW = 60
+_RATE_MAX = 10
+
+
+def _check_rate_limit(ip: str):
+    now = time.time()
+    attempts = [t for t in _login_attempts[ip] if now - t < _RATE_WINDOW]
+    attempts.append(now)
+    _login_attempts[ip] = attempts
+    if len(attempts) > _RATE_MAX:
+        raise HTTPException(status_code=429, detail="Trop de tentatives, réessayez dans 60 secondes")
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
-SECRET_KEY = os.getenv("SECRET_KEY", "findoc_secret")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY manquante — definissez-la dans backend/.env")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
@@ -95,7 +116,8 @@ def register(email: str, password: str, nom: str, role: str = "junior", db: Sess
     summary="Se connecter et recuperer un token JWT",
     description="Endpoint OAuth2 password flow utilise par le frontend.",
 )
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    _check_rate_limit(request.client.host if request.client else "unknown")
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")

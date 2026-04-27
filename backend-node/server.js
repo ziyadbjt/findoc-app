@@ -14,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 const DB_PATH = path.join(__dirname, "..", "backend", "findoc.db");
+const BACKEND_ENV_PATH = path.join(__dirname, "..", "backend", ".env");
 const PYTHON = (() => {
   for (const candidate of ["C:/Python314/python.exe", "python3", "python"]) {
     try {
@@ -23,6 +24,13 @@ const PYTHON = (() => {
   }
   return null;
 })();
+
+function readEnvValue(key) {
+  if (process.env[key]) return process.env[key];
+  if (!fs.existsSync(BACKEND_ENV_PATH)) return "";
+  const match = fs.readFileSync(BACKEND_ENV_PATH, "utf8").match(new RegExp(`^${key}=(.*)$`, "m"));
+  return match?.[1]?.trim()?.replace(/^['"]|['"]$/g, "") || "";
+}
 
 function sqlQuery(sql, params = []) {
   if (!PYTHON || !fs.existsSync(DB_PATH)) return null;
@@ -63,11 +71,350 @@ print(json.dumps({"lastrowid": rowid}))
   }
 }
 
+function ensureSchema() {
+  if (!PYTHON || !fs.existsSync(DB_PATH)) return;
+  const script = `
+import sqlite3
+conn = sqlite3.connect(${JSON.stringify(DB_PATH)})
+conn.execute("""
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  hashed_password TEXT,
+  nom TEXT,
+  role TEXT DEFAULT 'collab',
+  status TEXT DEFAULT 'active',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+if "status" not in columns:
+    conn.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+if "created_at" not in columns:
+    conn.execute("ALTER TABLE users ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS team_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dossier_id INTEGER NOT NULL,
+  user_id INTEGER,
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS private_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dossier_id INTEGER NOT NULL,
+  sender_id INTEGER,
+  recipient_id INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  user_email TEXT,
+  action TEXT NOT NULL,
+  ressource TEXT,
+  ressource_id INTEGER,
+  details TEXT,
+  ip TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS relances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  facture_id INTEGER,
+  niveau INTEGER DEFAULT 1,
+  destinataire_email TEXT,
+  destinataire_nom TEXT,
+  sujet TEXT,
+  corps TEXT,
+  envoye INTEGER DEFAULT 0,
+  envoye_at TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.commit()
+conn.close()
+print("ok")
+`;
+  try {
+    execFileSync(PYTHON, ["-c", script], { timeout: 5000, encoding: "utf8" });
+  } catch {}
+}
+
+function calculerRetard(dateFacture, delaiJours = 60, dateEcheance = null) {
+  const source = dateEcheance || dateFacture;
+  if (!source) return { retard_jours: 0 };
+  const baseDate = new Date(source);
+  if (Number.isNaN(baseDate.getTime())) return { retard_jours: 0 };
+  if (!dateEcheance && dateFacture) baseDate.setDate(baseDate.getDate() + delaiJours);
+  const today = new Date();
+  const diff = today.getTime() - baseDate.getTime();
+  return { retard_jours: Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))) };
+}
+
+function calculerPenalite(montantTtc, retardJours, tauxAnnuel = 2.25) {
+  const montant = Number(montantTtc || 0);
+  const retard = Number(retardJours || 0);
+  if (!montant || !retard) return 0;
+  return (montant * (tauxAnnuel / 100) * retard) / 365;
+}
+
+function buildChatContext(dossierId) {
+  const dossier = (sqlQuery("SELECT * FROM dossiers WHERE id = ?", [dossierId]) || [])[0] || {};
+  const factures = sqlQuery("SELECT * FROM factures WHERE dossier_id = ? ORDER BY date_facture DESC, id DESC", [dossierId]) || [];
+  const factureIds = factures.map((facture) => facture.id).filter(Boolean);
+  const placeholders = factureIds.map(() => "?").join(",");
+  const ecritures = factureIds.length
+    ? (sqlQuery(`SELECT * FROM ecritures WHERE facture_id IN (${placeholders}) ORDER BY id ASC`, factureIds) || [])
+    : [];
+
+  const achats = factures.filter((facture) => (facture.type || "achat") === "achat");
+  const ventes = factures.filter((facture) => facture.type === "vente");
+  const retards = factures.filter((facture) => facture.paiement === "en_retard");
+  const penalites = retards.reduce((total, facture) => {
+    const retard = calculerRetard(facture.date_facture, 60, facture.date_echeance);
+    return total + calculerPenalite(facture.montant_ttc, retard.retard_jours, 2.25);
+  }, 0);
+
+  return {
+    dossier,
+    factures,
+    ecritures,
+    stats: {
+      generated_at: new Date().toISOString(),
+      achats_ttc: Number(achats.reduce((total, facture) => total + Number(facture.montant_ttc || 0), 0).toFixed(2)),
+      ventes_ttc: Number(ventes.reduce((total, facture) => total + Number(facture.montant_ttc || 0), 0).toFixed(2)),
+      tva_deductible: Number(achats.reduce((total, facture) => total + Number(facture.tva || 0), 0).toFixed(2)),
+      tva_collectee: Number(ventes.reduce((total, facture) => total + Number(facture.tva || 0), 0).toFixed(2)),
+      factures_en_retard: retards.length,
+      penalites_totales: Number(penalites.toFixed(2)),
+    },
+  };
+}
+
+function buildChatContextSummary(context) {
+  const dossier = context.dossier || {};
+  const factures = context.factures || [];
+  const stats = context.stats || {};
+  const lines = [
+    `Dossier: ${dossier.raison_sociale || "N/A"} (${dossier.forme_juridique || "N/A"})`,
+    `Ville: ${dossier.ville || "N/A"}`,
+    `Nombre de factures: ${factures.length}`,
+    `Retards: ${stats.factures_en_retard || 0}`,
+    `TVA collectee: ${stats.tva_collectee || 0}`,
+    `TVA deductible: ${stats.tva_deductible || 0}`,
+    "Extraits de factures:",
+  ];
+  factures.slice(0, 12).forEach((facture) => {
+    lines.push(
+      `- ${facture.num_facture || facture.nom_fichier || "Facture"}: ${facture.fournisseur || "N/A"} TTC=${facture.montant_ttc || 0} statut=${facture.paiement || "N/A"} echeance=${facture.date_echeance || "N/A"}`
+    );
+  });
+  return lines.join("\n");
+}
+
+function fallbackChatAnswer(message, context) {
+  const lowered = String(message || "").toLowerCase();
+  const stats = context.stats || {};
+  const factures = context.factures || [];
+
+  if (lowered.includes("retard")) {
+    const retards = factures.filter((facture) => facture.paiement === "en_retard");
+    if (!retards.length) return "Aucune facture en retard n'a ete detectee dans ce dossier.";
+    return [
+      "Factures en retard :",
+      ...retards.slice(0, 10).map((facture) =>
+        `- ${facture.num_facture || facture.nom_fichier || "Facture"} / ${facture.fournisseur || "N/A"} / ${Number(facture.montant_ttc || 0).toFixed(2)} MAD / echeance ${facture.date_echeance || "N/A"}`
+      ),
+    ].join("\n");
+  }
+
+  if (lowered.includes("tva")) {
+    const solde = Number((Number(stats.tva_collectee || 0) - Number(stats.tva_deductible || 0)).toFixed(2));
+    return [
+      `TVA collectee: ${Number(stats.tva_collectee || 0).toFixed(2)} MAD`,
+      `TVA deductible: ${Number(stats.tva_deductible || 0).toFixed(2)} MAD`,
+      `Solde TVA estime: ${solde.toFixed(2)} MAD`,
+    ].join("\n");
+  }
+
+  if (lowered.includes("69-21") || lowered.includes("penalit")) {
+    return `Penalites estimees Loi 69-21: ${Number(stats.penalites_totales || 0).toFixed(2)} MAD.`;
+  }
+
+  return [
+    "Resume dossier:",
+    `- Factures: ${factures.length}`,
+    `- Montant achats TTC: ${Number(stats.achats_ttc || 0).toFixed(2)} MAD`,
+    `- Montant ventes TTC: ${Number(stats.ventes_ttc || 0).toFixed(2)} MAD`,
+    `- Penalites estimees: ${Number(stats.penalites_totales || 0).toFixed(2)} MAD`,
+  ].join("\n");
+}
+
+function writeSse(res, event, data) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+async function streamClaudeChat({ message, history, context, res }) {
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    const answer = fallbackChatAnswer(message, context);
+    answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
+    writeSse(res, "done", { ok: true, fallback: true });
+    return;
+  }
+
+  const stats = context.stats || {};
+  const alerts = [];
+  if ((stats.factures_en_retard || 0) > 0) {
+    alerts.push(`⚠️ ${stats.factures_en_retard} facture(s) en retard — pénalités estimées Loi 69-21 : ${Number(stats.penalites_totales || 0).toFixed(2)} MAD`);
+  }
+  const soldeTva = Number((stats.tva_collectee || 0) - (stats.tva_deductible || 0));
+  if (soldeTva > 10000) {
+    alerts.push(`⚠️ TVA nette à reverser au DGI : ${soldeTva.toFixed(2)} MAD`);
+  }
+
+  const systemPrompt = [
+    "Tu es FinDoc, copilote comptable expert dédié aux cabinets comptables marocains.",
+    "Réponds TOUJOURS en français, de manière concise, claire et opérationnelle.",
+    "Utilise le Plan Comptable Marocain (PCM), la Loi 69-21 sur les délais de paiement, la TVA à 20% par défaut, et la RAS (retenue à la source).",
+    "Quand une information manque dans les données du dossier, dis-le clairement sans inventer.",
+    "Pour les réponses structurées, utilise du Markdown (listes, gras, tableaux).",
+    "",
+    ...(alerts.length ? ["## Alertes actives", ...alerts, ""] : []),
+    "## Contexte du dossier",
+    buildChatContextSummary(context),
+  ].join("\n");
+
+  const messages = [
+    ...(Array.isArray(history) ? history.slice(-8) : []).map((item) => ({
+      role: item.role === "assistant" ? "assistant" : "user",
+      content: String(item.content || ""),
+    })),
+    { role: "user", content: String(message || "") },
+  ];
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Anthropic error ${response.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+  let finished = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const rawData = line.slice(6).trim();
+      if (!rawData || rawData === "[DONE]") continue;
+      let payload;
+      try { payload = JSON.parse(rawData); } catch { continue; }
+
+      if (payload.type === "content_block_delta" && payload.delta?.type === "text_delta" && payload.delta.text) {
+        writeSse(res, "chunk", { text: payload.delta.text });
+      } else if (payload.type === "message_stop" || payload.type === "message_delta") {
+        if (!finished) { finished = true; writeSse(res, "done", { ok: true }); }
+      }
+    }
+  }
+
+  if (!finished) writeSse(res, "done", { ok: true });
+}
+
 const tokens = {};
 let nextId = 100;
 const memDossiers = [];
 
-const USERS = { "ziyad@cabinetchami.ma": { email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin" } };
+const ROLES = ["admin", "collab", "invite"];
+const USERS = {
+  "ziyad@cabinetchami.ma": { id: 1, email: "ziyad@cabinetchami.ma", nom: "Ziyad", role: "admin", status: "active" },
+  "sarah@cabinetchami.ma": { id: 2, email: "sarah@cabinetchami.ma", nom: "Sarah", role: "collab", status: "active" },
+  "youssef@cabinetchami.ma": { id: 3, email: "youssef@cabinetchami.ma", nom: "Youssef", role: "invite", status: "active" },
+};
+
+ensureSchema();
+
+function normalizeRole(role) {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "collaborateur" || value === "collab") return "collab";
+  if (value === "invité" || value === "invite") return "invite";
+  return ROLES.includes(value) ? value : "collab";
+}
+
+function seedDefaultUsers() {
+  if (!PYTHON || !fs.existsSync(DB_PATH)) return;
+  const existing = sqlQuery("SELECT COUNT(*) AS count FROM users");
+  if ((existing?.[0]?.count || 0) > 0) return;
+  Object.values(USERS).forEach((user) => {
+    sqlRun(
+      "INSERT INTO users (email, hashed_password, nom, role, status, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+      [user.email, bcrypt.hashSync("password123", 10), user.nom, normalizeRole(user.role), user.status || "active"]
+    );
+  });
+}
+
+seedDefaultUsers();
+
+function getUserByEmail(email) {
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users WHERE email = ?", [email]);
+  if (rows && rows.length > 0) return { ...rows[0], role: normalizeRole(rows[0].role) };
+  return USERS[email] || null;
+}
+
+function getUserById(id) {
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users WHERE id = ?", [id]);
+  if (rows && rows.length > 0) return { ...rows[0], role: normalizeRole(rows[0].role) };
+  return Object.values(USERS).find((user) => Number(user.id) === Number(id)) || null;
+}
+
+function listKnownUsers() {
+  const rows = sqlQuery("SELECT id, email, nom, role, status, created_at FROM users ORDER BY nom ASC, email ASC");
+  if (rows && rows.length > 0) return rows.map((row) => ({ ...row, role: normalizeRole(row.role) }));
+  return Object.values(USERS);
+}
+
+function requireAdmin(req, res) {
+  const email = requireAuth(req, res);
+  if (!email) return null;
+  const user = getUserByEmail(email);
+  if (!user || normalizeRole(user.role) !== "admin") {
+    res.status(403).json({ detail: "Acces reserve a l'admin" });
+    return null;
+  }
+  return user;
+}
 
 function requireAuth(req, res) {
   const authHeader = req.headers.authorization;
@@ -87,9 +434,12 @@ app.post("/auth/login", express.urlencoded({ extended: true }), (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(401).json({ detail: "Email ou mot de passe incorrect" });
 
-  const rows = sqlQuery("SELECT email, nom, role, hashed_password FROM users WHERE email = ?", [username]);
+  const rows = sqlQuery("SELECT email, nom, role, status, hashed_password FROM users WHERE email = ?", [username]);
   if (rows && rows.length > 0) {
     const user = rows[0];
+    if (user.status === "disabled") {
+      return res.status(403).json({ detail: "Compte desactive" });
+    }
     const hash = user.hashed_password || "";
     const isBcryptHash = typeof hash === "string" && hash.startsWith("$2");
     const passwordOk = isBcryptHash ? bcrypt.compareSync(password, hash) : hash === password;
@@ -110,9 +460,58 @@ app.post("/auth/login", express.urlencoded({ extended: true }), (req, res) => {
 app.get("/auth/me", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
-  const rows = sqlQuery("SELECT email, nom, role FROM users WHERE email = ?", [email]);
-  if (rows && rows.length > 0) return res.json(rows[0]);
-  return res.json(USERS[email] || { email, nom: email, role: "user" });
+  return res.json(getUserByEmail(email) || { email, nom: email, role: "collab", status: "active" });
+});
+
+app.get("/admin/users", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  res.json(listKnownUsers());
+});
+
+app.post("/admin/users", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const nom = String(req.body?.nom || "").trim();
+  const role = normalizeRole(req.body?.role);
+  const password = String(req.body?.password || "").trim() || "password123";
+
+  if (!email || !nom) return res.status(400).json({ detail: "Nom et email requis" });
+  if (getUserByEmail(email)) return res.status(409).json({ detail: "Utilisateur deja existant" });
+
+  const insert = sqlRun(
+    "INSERT INTO users (email, hashed_password, nom, role, status, created_at) VALUES (?, ?, ?, ?, 'active', datetime('now'))",
+    [email, bcrypt.hashSync(password, 10), nom, role]
+  );
+
+  if (!insert?.lastrowid) return res.status(500).json({ detail: "Creation impossible" });
+  logAction(admin.email, "create_user", "user", insert.lastrowid, `Utilisateur créé: ${email}`, null);
+  res.status(201).json(getUserById(insert.lastrowid));
+});
+
+app.patch("/admin/users/:id", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const user = getUserById(req.params.id);
+  if (!user) return res.status(404).json({ detail: "Utilisateur introuvable" });
+
+  const nextNom = req.body?.nom != null ? String(req.body.nom).trim() : user.nom;
+  const nextRole = req.body?.role != null ? normalizeRole(req.body.role) : normalizeRole(user.role);
+  const nextStatus = req.body?.status === "disabled" ? "disabled" : "active";
+
+  sqlRun(
+    "UPDATE users SET nom = ?, role = ?, status = ? WHERE id = ?",
+    [nextNom, nextRole, nextStatus, req.params.id]
+  );
+
+  if (req.body?.password) {
+    sqlRun("UPDATE users SET hashed_password = ? WHERE id = ?", [bcrypt.hashSync(String(req.body.password), 10), req.params.id]);
+  }
+
+  res.json(getUserById(req.params.id));
 });
 
 app.get("/dossiers/", (req, res) => {
@@ -200,6 +599,16 @@ app.delete("/dossiers/:id", (req, res) => {
   res.json({ message: "Dossier supprime" });
 });
 
+app.delete("/admin/users/:id", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  const user = getUserById(req.params.id);
+  if (!user) return res.status(404).json({ detail: "Utilisateur introuvable" });
+  if (Number(user.id) === Number(admin.id)) return res.status(400).json({ detail: "Impossible de se supprimer soi-meme" });
+  sqlRun("DELETE FROM users WHERE id = ?", [req.params.id]);
+  res.json({ message: "Utilisateur supprime" });
+});
+
 app.get("/factures/:dossier_id", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
@@ -236,10 +645,8 @@ app.post("/dossiers/extract-societe", upload.single("file"), (req, res) => {
   const tmpPath = path.join(os.tmpdir(), `findoc_${Date.now()}.${ext}`);
   fs.writeFileSync(tmpPath, req.file.buffer);
 
-  const envPath = path.join(__dirname, "..", "backend", ".env");
-  const apiKey = fs.existsSync(envPath)
-    ? (fs.readFileSync(envPath, "utf8").match(/ANTHROPIC_API_KEY=(.+)/)?.[1]?.trim() || "")
-    : "";
+  const envPath = BACKEND_ENV_PATH;
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
 
   const script = `
 import sys, os, json
@@ -264,10 +671,349 @@ print(json.dumps(result))
   }
 });
 
+app.post("/chat", async (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const dossierId = Number(req.body?.dossier_id);
+  const message = String(req.body?.message || "").trim();
+  const history = Array.isArray(req.body?.historique) ? req.body.historique : [];
+
+  if (!dossierId) return res.status(400).json({ detail: "dossier_id requis" });
+  if (!message) return res.status(400).json({ detail: "message requis" });
+
+  const context = buildChatContext(dossierId);
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  writeSse(res, "ready", { ok: true });
+
+  try {
+    await streamClaudeChat({ message, history, context, res });
+  } catch (error) {
+    console.error("[chat error]", error?.message, error?.stack?.slice(0, 500));
+    const answer = fallbackChatAnswer(message, context);
+    answer.split(" ").forEach((token) => writeSse(res, "chunk", { text: `${token} ` }));
+    writeSse(res, "done", {
+      ok: true,
+      fallback: true,
+      detail: String(error?.message || "openai_unavailable"),
+    });
+  } finally {
+    res.end();
+  }
+});
+
+app.get("/chat/team/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const rows = sqlQuery(
+    "SELECT id, dossier_id, user_id, content, created_at FROM team_messages WHERE dossier_id = ? ORDER BY created_at ASC, id ASC",
+    [req.params.dossier_id]
+  ) || [];
+
+  res.json(
+    rows.map((row) => {
+      const author = getUserById(row.user_id) || getUserByEmail(email);
+      return {
+        ...row,
+        user_name: author?.nom || author?.email || email,
+        user_email: author?.email || email,
+      };
+    })
+  );
+});
+
+app.get("/chat/private/:dossier_id/contacts", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const me = getUserByEmail(email);
+  if (!me?.id) return res.json([]);
+
+  const knownUsers = listKnownUsers()
+    .filter((user) => Number(user.id) !== Number(me.id))
+    .map((contact) => {
+      const row = (sqlQuery(
+        `
+        SELECT content, created_at
+        FROM private_messages
+        WHERE dossier_id = ?
+          AND (
+            (sender_id = ? AND recipient_id = ?)
+            OR
+            (sender_id = ? AND recipient_id = ?)
+          )
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        `,
+        [req.params.dossier_id, me.id, contact.id, contact.id, me.id]
+      ) || [])[0];
+      return {
+        id: contact.id,
+        email: contact.email,
+        nom: contact.nom || contact.email,
+        last_message: row?.content || null,
+        last_message_at: row?.created_at || null,
+      };
+    })
+    .sort((a, b) => {
+      if (!a.last_message_at && !b.last_message_at) return String(a.nom).localeCompare(String(b.nom));
+      if (!a.last_message_at) return 1;
+      if (!b.last_message_at) return -1;
+      return String(b.last_message_at).localeCompare(String(a.last_message_at));
+    });
+  res.json(knownUsers);
+});
+
+app.get("/chat/private/:dossier_id/:other_user_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const me = getUserByEmail(email);
+  if (!me?.id) return res.json([]);
+
+  const rows = sqlQuery(
+    `
+    SELECT id, dossier_id, sender_id, recipient_id, content, created_at
+    FROM private_messages
+    WHERE dossier_id = ?
+      AND (
+        (sender_id = ? AND recipient_id = ?)
+        OR
+        (sender_id = ? AND recipient_id = ?)
+      )
+    ORDER BY created_at ASC, id ASC
+    `,
+    [req.params.dossier_id, me.id, req.params.other_user_id, req.params.other_user_id, me.id]
+  ) || [];
+
+  res.json(
+    rows.map((row) => {
+      const sender = getUserById(row.sender_id) || getUserByEmail(email);
+      return {
+        ...row,
+        sender_name: sender?.nom || sender?.email || email,
+        sender_email: sender?.email || email,
+      };
+    })
+  );
+});
+
+app.post("/chat/team/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const content = (req.body?.content || "").trim();
+  if (!content) return res.status(400).json({ detail: "Message vide" });
+
+  const user = (sqlQuery("SELECT id, email, nom FROM users WHERE email = ?", [email]) || [])[0];
+  const fallbackUser = getUserByEmail(email);
+  const insert = sqlRun(
+    "INSERT INTO team_messages (dossier_id, user_id, content, created_at) VALUES (?, ?, ?, datetime('now'))",
+    [req.params.dossier_id, user?.id || fallbackUser?.id || null, content]
+  );
+
+  if (!insert?.lastrowid) {
+    return res.status(500).json({ detail: "Impossible d'envoyer le message" });
+  }
+
+  const row = (sqlQuery(
+    "SELECT id, dossier_id, user_id, content, created_at FROM team_messages WHERE id = ?",
+    [insert.lastrowid]
+  ) || [])[0];
+
+  const author = user || fallbackUser || getUserByEmail(email);
+  res.json(row ? {
+    ...row,
+    user_name: author?.nom || author?.email || email,
+    user_email: author?.email || email,
+  } : {
+    id: insert.lastrowid,
+    dossier_id: Number(req.params.dossier_id),
+    user_id: author?.id || null,
+    user_name: author?.nom || author?.email || email,
+    user_email: author?.email || email,
+    content,
+    created_at: new Date().toISOString(),
+  });
+});
+
+app.post("/chat/private/:dossier_id/:other_user_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const content = (req.body?.content || "").trim();
+  if (!content) return res.status(400).json({ detail: "Message vide" });
+
+  const me = getUserByEmail(email);
+  const otherUser = getUserById(req.params.other_user_id);
+
+  if (!me?.id || !otherUser?.id) {
+    return res.status(404).json({ detail: "Utilisateur introuvable" });
+  }
+
+  const insert = sqlRun(
+    "INSERT INTO private_messages (dossier_id, sender_id, recipient_id, content, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+    [req.params.dossier_id, me.id, otherUser.id, content]
+  );
+
+  if (!insert?.lastrowid) {
+    return res.status(500).json({ detail: "Impossible d'envoyer le message" });
+  }
+
+  const row = (sqlQuery(
+    "SELECT id, dossier_id, sender_id, recipient_id, content, created_at FROM private_messages WHERE id = ?",
+    [insert.lastrowid]
+  ) || [])[0];
+
+  res.json(row ? {
+    ...row,
+    sender_name: me.nom || me.email,
+    sender_email: me.email,
+  } : {
+    id: insert.lastrowid,
+    dossier_id: Number(req.params.dossier_id),
+    sender_id: me.id,
+    recipient_id: otherUser.id,
+    sender_name: me.nom || me.email,
+    sender_email: me.email,
+    content,
+    created_at: new Date().toISOString(),
+  });
+});
+
+// ── Audit log ────────────────────────────────────────────────────────────────
+function logAction(userEmail, action, ressource, ressourceId, details, ip) {
+  try {
+    const user = getUserByEmail(userEmail);
+    sqlRun(
+      "INSERT INTO audit_logs (user_id, user_email, action, ressource, ressource_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+      [user?.id || null, userEmail, action, ressource || null, ressourceId || null, details || null, ip || null]
+    );
+  } catch {}
+}
+
+app.get("/admin/audit", (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+  const limit = Math.min(500, parseInt(req.query.limit, 10) || 200);
+  const rows = sqlQuery(
+    "SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT ?",
+    [limit]
+  ) || [];
+  res.json(rows);
+});
+
+// ── Relances ─────────────────────────────────────────────────────────────────
+app.post("/relances/send", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const { facture_ids, destinataire_email, destinataire_nom, sujet, corps, niveau } = req.body || {};
+  if (!facture_ids || !facture_ids.length) return res.status(400).json({ detail: "facture_ids requis" });
+
+  const user = getUserByEmail(email);
+  let count = 0;
+
+  for (const facId of facture_ids) {
+    sqlRun(
+      "INSERT INTO relances (facture_id, niveau, destinataire_email, destinataire_nom, sujet, corps, envoye, envoye_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, datetime('now'))",
+      [facId, niveau || 1, destinataire_email || null, destinataire_nom || null, sujet || null, corps || null, user?.id || null]
+    );
+    count++;
+  }
+
+  logAction(email, "send_relance", "relance", null, `${count} relance(s) pour ${destinataire_email || "—"}`, req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
+
+  res.json({ envoye: false, count, message: `${count} relance(s) enregistree(s). Configurez SMTP pour l'envoi réel.` });
+});
+
+app.get("/relances/:dossier_id", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+  const factureIds = (sqlQuery("SELECT id FROM factures WHERE dossier_id=?", [req.params.dossier_id]) || []).map((r) => r.id);
+  if (!factureIds.length) return res.json([]);
+  const placeholders = factureIds.map(() => "?").join(",");
+  const rows = sqlQuery(`SELECT * FROM relances WHERE facture_id IN (${placeholders}) ORDER BY created_at DESC`, factureIds) || [];
+  res.json(rows);
+});
+
+// ── DGI TVA export ────────────────────────────────────────────────────────────
+app.get("/factures/:dossier_id/export-dgi", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const dossierId = req.params.dossier_id;
+  const mois = parseInt(req.query.mois, 10) || 0;
+  const annee = parseInt(req.query.annee, 10) || 0;
+
+  let factures = sqlQuery("SELECT * FROM factures WHERE dossier_id=?", [dossierId]) || [];
+
+  if (mois && annee) {
+    factures = factures.filter((f) => {
+      if (!f.date_facture) return false;
+      const d = new Date(String(f.date_facture).slice(0, 7));
+      return d.getMonth() + 1 === mois && d.getFullYear() === annee;
+    });
+  } else if (annee) {
+    factures = factures.filter((f) => f.date_facture && String(f.date_facture).startsWith(String(annee)));
+  }
+
+  const achats = factures.filter((f) => (f.type || "achat") === "achat");
+  const ventes = factures.filter((f) => f.type === "vente");
+  const tvaCollectee = ventes.reduce((s, f) => s + Number(f.tva || 0), 0);
+  const tvaDeductible = achats.reduce((s, f) => s + Number(f.tva || 0), 0);
+  const solde = Math.round((tvaCollectee - tvaDeductible) * 100) / 100;
+
+  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const periode = mois && annee ? `${String(mois).padStart(2, "0")}/${annee}` : String(annee || "Tous");
+
+  const lines = [
+    `=== DECLARATION TVA — Format DGI Maroc ===`,
+    `Dossier ID;${dossierId}`,
+    `Periode;${periode}`,
+    `Genere le;${now}`,
+    ``,
+    `RUBRIQUE;BASE HT (MAD);TAUX TVA (%);TVA (MAD)`,
+    ...ventes.map((f) => {
+      const ht = Math.round(Number(f.montant_ht || 0) * 100) / 100;
+      const tva = Math.round(Number(f.tva || 0) * 100) / 100;
+      const taux = ht ? Math.round((tva / ht) * 10000) / 100 : 20;
+      return `Vente - ${f.fournisseur || "Client"};${ht};${taux};${tva}`;
+    }),
+    ``,
+    `TOTAL TVA COLLECTEE;;;${Math.round(tvaCollectee * 100) / 100}`,
+    ``,
+    ...achats.map((f) => {
+      const ht = Math.round(Number(f.montant_ht || 0) * 100) / 100;
+      const tva = Math.round(Number(f.tva || 0) * 100) / 100;
+      const taux = ht ? Math.round((tva / ht) * 10000) / 100 : 20;
+      return `Achat - ${f.fournisseur || "Fournisseur"};${ht};${taux};${tva}`;
+    }),
+    ``,
+    `TOTAL TVA DEDUCTIBLE;;;${Math.round(tvaDeductible * 100) / 100}`,
+    ``,
+    `SOLDE TVA NET;;;${solde}`,
+    `(+ = a reverser DGI  /  - = credit TVA);;;`,
+  ];
+
+  const csv = lines.join("\r\n");
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=declaration_tva_${dossierId}.csv`);
+  res.send("﻿" + csv);
+});
+
 app.get("/", (req, res) => res.json({ message: "FinDoc API is running", db: !!PYTHON && fs.existsSync(DB_PATH) }));
 
 const PORT = 8000;
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`INFO: FinDoc Node.js server -> http://127.0.0.1:${PORT}`);
+const HOST = process.env.HOST || "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  console.log(`INFO: FinDoc Node.js server -> http://${HOST}:${PORT}`);
   console.log(`INFO: SQLite via Python: ${PYTHON ? "OK" : "fallback in-memory"}`);
 });

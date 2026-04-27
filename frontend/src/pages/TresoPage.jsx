@@ -70,8 +70,9 @@ const HORIZONS = [
   { key: 90,  label: "90 jours" },
 ];
 
-export default function TresoPage({ factures, dossier }) {
-  const soldeInitial = 847230; // TODO: brancher sur relevé bancaire réel
+export default function TresoPage({ factures, dossier, soldeInitialOverride }) {
+  // soldeInitialOverride peut être alimenté par le dernier relevé bancaire importé
+  const soldeInitial = soldeInitialOverride != null ? soldeInitialOverride : 0;
 
   const forecast30  = useMemo(() => buildForecast(factures, soldeInitial, 30),  [factures]);
   const forecast60  = useMemo(() => buildForecast(factures, soldeInitial, 60),  [factures]);

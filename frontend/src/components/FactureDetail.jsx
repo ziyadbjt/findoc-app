@@ -1,19 +1,52 @@
 import { useState, useEffect } from "react";
-import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, Upload, Edit2, MoreHorizontal, ArrowRight } from "lucide-react";
+import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, Upload, ChevronDown } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 import { useCorrection } from "../hooks/useCorrection";
+import { getFactureFile, updateFacture } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 
 export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
   const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [filePreview, setFilePreview] = useState(null);
   const correct = useCorrection(dossierId);
+  const { token } = useAuth();
+  const toast = useToast();
 
   useEffect(() => { setLocalF(facture); }, [facture?.id]);
 
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+    setFilePreview(null);
+
+    if (!facture?.id || !token) return undefined;
+
+    getFactureFile(token, facture.id)
+      .then((response) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setFilePreview({
+          url: objectUrl,
+          type: response.data.type || "",
+        });
+      })
+      .catch(() => {
+        if (active) setFilePreview({ error: true });
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [facture?.id, token]);
+
   if (!facture) return null;
 
-  const update = (key, value) => {
+  const update = async (key, value) => {
     const original = localF[key];
     const next = { ...localF, [key]: value };
     if (key === "montant_ht" || key === "tva_taux") {
@@ -21,7 +54,19 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
       next.montant_ttc = +(next.montant_ht + next.tva).toFixed(2);
     }
     setLocalF(next);
-    onUpdate?.(next);
+    setSaving(true);
+    try {
+      const payload = key === "tva_taux" ? { montant_ht: next.montant_ht, tva: next.tva, montant_ttc: next.montant_ttc } : { [key]: value };
+      const response = await updateFacture(token, localF.id, payload);
+      const saved = { ...next, ...response.data };
+      setLocalF(saved);
+      onUpdate?.(saved);
+    } catch {
+      setLocalF(localF);
+      toast("Correction non sauvegardée", "neg");
+    } finally {
+      setSaving(false);
+    }
     // Apprentissage automatique sur les champs clés
     if (["fournisseur", "compte_pcm", "code_tiers", "categorie"].includes(key)) {
       correct({ facture: localF, champ: key, original: String(original ?? ""), corrige: String(value ?? "") });
@@ -37,93 +82,193 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
     montant_ttc:  { top: 568, left: 340, width: 140, height: 20 },
   };
 
+  const invoiceYear = localF.date_facture ? String(localF.date_facture).slice(0, 4) : "";
+  const hasAccountingAlert =
+    localF.traitement_comptable &&
+    localF.traitement_comptable !== "exercice_courant";
+
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="drawer">
-        <div className="drawer-head">
-          <button className="icon-btn" onClick={onClose}><X size={15} /></button>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 7, background: "var(--bg-inset)", display: "grid", placeItems: "center" }}><FileText size={14} /></div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 500 }} className="truncate">{localF.fournisseur || "Extraction…"}</div>
-              <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{localF.nom_fichier} · {localF.num_facture}</div>
+      <div className="drawer invoice-review-drawer">
+        <section className="invoice-review-viewer">
+          <div className="invoice-review-toolbar">
+            <button className="invoice-icon-btn" onClick={onClose} title="Fermer"><X size={16} /></button>
+            <div className="invoice-toolbar-title">
+              <FileText size={15} />
+              <span>{localF.nom_fichier || "Facture"}</span>
             </div>
+            <div className="invoice-toolbar-spacer" />
+            <button className="invoice-icon-btn" title="Télécharger"><Download size={16} /></button>
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            {localF.confidence > 0 && (
-              <span className={`badge ${localF.confidence > 0.94 ? "pos" : "warn"}`}>
-                <Sparkles size={11} />
-                <span className="mono tabular">{Math.round(localF.confidence * 100)}%</span> confiance
-              </span>
-            )}
-            <button className="btn btn-ghost sm"><Download size={13} /> PDF</button>
-            <button className="btn btn-secondary sm"><Check size={13} /> Valider</button>
-            <button className="icon-btn"><MoreHorizontal size={15} /></button>
+          <div className="invoice-document-stage">
+            <DocumentPreview filePreview={filePreview} facture={localF} activeField={activeField} boxes={boxes} />
           </div>
-        </div>
+        </section>
 
-        <div className="drawer-body" style={{ display: "grid", gridTemplateColumns: "minmax(440px, 1fr) minmax(440px, 1fr)", minHeight: 0 }}>
-          <div className="pdf-stage">
-            <div className="pdf-page">
-              <PdfMock f={localF} activeField={activeField} boxes={boxes} />
+        <aside className="invoice-review-panel">
+          <div className="invoice-summary">
+            <div>
+              <h2>{localF.fournisseur || "Fournisseur à confirmer"}</h2>
+              <div className="invoice-summary-meta">{localF.num_facture || "Sans numéro"} · {formatDate(localF.date_facture)}</div>
+            </div>
+            <div className="invoice-summary-amount">
+              <strong>{formatMAD(localF.montant_ttc)} MAD</strong>
+              <span>{localF.type || "achat"}</span>
             </div>
           </div>
 
-          <div style={{ padding: "20px 24px", overflowY: "auto", borderLeft: "1px solid var(--line-0)", background: "var(--bg-0)" }}>
-            {localF.paiement === "en_retard" && (
-              <div style={{ padding: 12, background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 10, marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <AlertTriangle size={16} style={{ color: "var(--warn-ink)", flexShrink: 0, marginTop: 1 }} />
+          <div className="invoice-panel-scroll">
+            {hasAccountingAlert && (
+              <div className="invoice-alert">
+                <AlertTriangle size={17} />
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--warn-ink)" }}>Retard de paiement</div>
-                  <div style={{ fontSize: 11.5, color: "var(--warn-ink)", marginTop: 2, opacity: 0.85 }}>
-                    Retard de paiement · pénalité calculée au taux BAM 2,25% + 7 pts
-                  </div>
+                  <strong>Rattachement d'exercice à vérifier</strong>
+                  <p>{localF.analyse_ai || "La facture semble concerner un exercice différent."}</p>
                 </div>
-                <button className="btn sm" style={{ marginLeft: "auto", color: "var(--warn-ink)", background: "transparent", border: "1px solid var(--warn)" }}>
-                  Relancer <ArrowRight size={11} />
-                </button>
               </div>
             )}
 
-            <div style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: 0.06, marginBottom: 10, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-              <Sparkles size={11} style={{ color: "var(--accent)" }} /> Champs extraits
-            </div>
-
-            <FieldsTable f={localF} onFocus={setActiveField} editing={editing} setEditing={setEditing} onUpdate={update} />
-
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: 0.06, marginBottom: 10, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                <Database size={11} /> Écritures générées · PCM Maroc
-                <span style={{ marginLeft: "auto", fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--ink-2)" }}>Journal <span className="mono">ACH</span></span>
+            <section className="invoice-section">
+              <h3>Décision comptable</h3>
+              <div className="invoice-form-grid">
+                <Field label="Exercice">
+                  <input
+                    className="invoice-input"
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    defaultValue={localF.exercice_rattachement || invoiceYear}
+                    onBlur={(event) => update("exercice_rattachement", parseInt(event.target.value, 10) || null)}
+                  />
+                </Field>
+                <Field label="Traitement">
+                  <select className="invoice-input" value={localF.traitement_comptable || "exercice_courant"} onChange={(event) => update("traitement_comptable", event.target.value)}>
+                    <option value="exercice_courant">Exercice courant</option>
+                    <option value="charge_constatee_avance">Charge constatée d'avance</option>
+                    <option value="produit_constate_avance">Produit constaté d'avance</option>
+                    <option value="rattachement_exercice_precedent">Exercice précédent</option>
+                    <option value="a_verifier">À vérifier</option>
+                  </select>
+                </Field>
+                <Field label="Statut">
+                  <select className="invoice-input" value={localF.validation_status || "a_valider"} onChange={(event) => update("validation_status", event.target.value)}>
+                    <option value="a_valider">À valider</option>
+                    <option value="a_verifier">À vérifier</option>
+                    <option value="valide">Validée</option>
+                    <option value="exclue">Exclue</option>
+                  </select>
+                </Field>
               </div>
-              <Ledger rows={ecritures || []} />
-              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                <button className="btn btn-secondary sm"><Edit2 size={12} /> Modifier comptes</button>
-                <button className="btn btn-ghost sm"><Download size={12} /> Exporter ligne</button>
-              </div>
-            </div>
+            </section>
 
-            <div style={{ marginTop: 28 }}>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: 0.06, marginBottom: 10, fontWeight: 500 }}>Historique</div>
-              {[
-                { icon: <Upload size={11} />, t: "Fichier uploadé",          by: "Ziyad B.", ts: "il y a 28 min" },
-                { icon: <Sparkles size={11} />, t: "Extraction Claude · " + Math.round((localF.confidence || 0.95) * 100) + "%", by: "IA", ts: "il y a 28 min" },
-                { icon: <Database size={11} />, t: "Écritures générées",     by: "IA",       ts: "il y a 28 min" },
-                { icon: <Check size={11} />, t: "Validée par Senior",         by: "Ziyad B.", ts: "il y a 14 min" },
-              ].map((h, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: i < 3 ? "1px solid var(--line-1)" : 0, fontSize: 12 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 99, background: "var(--bg-inset)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>{h.icon}</div>
-                  <div style={{ flex: 1 }}>{h.t}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{h.by} · {h.ts}</div>
+            <section className="invoice-section">
+              <div className="invoice-section-head">
+                <h3>Champs essentiels</h3>
+                <span><Sparkles size={12} /> IA {Math.round((localF.confidence || 0) * 100)}%</span>
+              </div>
+              <div className="invoice-form-grid">
+                <Field label="Type">
+                  <select className="invoice-input" value={localF.type || "achat"} onChange={(event) => update("type", event.target.value)}>
+                    <option value="achat">Achat</option>
+                    <option value="vente">Vente</option>
+                  </select>
+                </Field>
+                <Field label="Échéance">
+                  <input className="invoice-input" type="date" defaultValue={localF.date_echeance || ""} onBlur={(event) => update("date_echeance", event.target.value)} />
+                </Field>
+                <Field label="Montant HT">
+                  <input className="invoice-input tabular" type="number" step="0.01" defaultValue={localF.montant_ht || 0} onBlur={(event) => update("montant_ht", parseFloat(event.target.value) || 0)} />
+                </Field>
+                <Field label="TVA">
+                  <input className="invoice-input tabular" type="number" step="0.01" defaultValue={localF.tva || 0} onBlur={(event) => update("tva", parseFloat(event.target.value) || 0)} />
+                </Field>
+                <Field label="Total TTC" wide>
+                  <input className="invoice-input tabular strong" readOnly value={formatMAD(localF.montant_ttc)} />
+                </Field>
+                <Field label="Compte PCM">
+                  <input className="invoice-input tabular" defaultValue={localF.compte_pcm || ""} onBlur={(event) => update("compte_pcm", event.target.value)} />
+                </Field>
+              </div>
+            </section>
+
+            <details className="invoice-section invoice-details">
+              <summary>
+                Détails avancés
+                <ChevronDown size={16} />
+              </summary>
+              <div className="invoice-advanced-body">
+                <FieldsTable f={localF} onFocus={setActiveField} editing={editing} setEditing={setEditing} onUpdate={update} />
+                <div className="invoice-ledger-block">
+                  <div className="invoice-ledger-title"><Database size={13} /> Écritures générées</div>
+                  <Ledger rows={ecritures || []} />
                 </div>
-              ))}
-            </div>
-            <div style={{ height: 40 }} />
+              </div>
+            </details>
           </div>
-        </div>
+
+          <div className="invoice-actionbar">
+            <button className="invoice-secondary-btn" onClick={() => update("validation_status", "a_verifier")} disabled={saving}>
+              À vérifier
+            </button>
+            <button className="invoice-primary-btn" onClick={() => update("validation_status", "valide")} disabled={saving}>
+              <Check size={16} /> {saving ? "Sauvegarde..." : "Valider facture"}
+            </button>
+          </div>
+        </aside>
       </div>
     </>
+  );
+}
+
+function Field({ label, children, wide }) {
+  return (
+    <label className={`invoice-field${wide ? " wide" : ""}`}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function DocumentPreview({ filePreview, facture, activeField, boxes }) {
+  if (filePreview?.url && filePreview.type === "application/pdf") {
+    return (
+      <iframe
+        title={facture.nom_fichier || "Facture"}
+        src={filePreview.url}
+        style={{ width: "100%", height: "100%", minHeight: 720, border: 0, background: "white", borderRadius: 8 }}
+      />
+    );
+  }
+
+  if (filePreview?.url && filePreview.type.startsWith("image/")) {
+    return (
+      <img
+        src={filePreview.url}
+        alt={facture.nom_fichier || "Facture"}
+        style={{ maxWidth: "100%", height: "auto", display: "block", background: "white", borderRadius: 8 }}
+      />
+    );
+  }
+
+  if (filePreview?.error) {
+    return (
+      <div className="pdf-page">
+        <div style={{ padding: 14, marginBottom: 14, background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 8, color: "var(--warn-ink)", fontSize: 12 }}>
+          Fichier original non disponible pour cette facture. Aperçu reconstruit à partir des champs extraits.
+        </div>
+        <PdfMock f={facture} activeField={activeField} boxes={boxes} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="pdf-page">
+      <div style={{ padding: 14, marginBottom: 14, background: "var(--bg-inset)", borderRadius: 8, color: "var(--ink-2)", fontSize: 12 }}>
+        Chargement du fichier original...
+      </div>
+      <PdfMock f={facture} activeField={activeField} boxes={boxes} />
+    </div>
   );
 }
 
@@ -196,6 +341,7 @@ function PdfMock({ f, activeField, boxes }) {
 
 function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
   const rows = [
+    { key: "type",          label: "Type",          value: f.type || "achat",                         conf: 1.0, editable: true, mono: true },
     { key: "fournisseur",   label: "Fournisseur",   value: f.fournisseur,                          conf: f.confidence,        editable: true },
     { key: "code_tiers",    label: "Code tiers",    value: f.code_tiers,                           conf: f.confidence - 0.05, editable: true, mono: true },
     { key: "num_facture",   label: "N° Facture",    value: f.num_facture,                          conf: f.confidence + 0.01, editable: true, mono: true },
@@ -207,6 +353,10 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
     { key: "montant_ttc",   label: "Montant TTC",   value: formatMAD(f.montant_ttc) + " MAD",      conf: f.confidence + 0.03, editable: false, mono: true, strong: true },
     { key: "compte_pcm",    label: "Compte PCM",    value: f.compte_pcm,                           conf: Math.max(0.75, f.confidence - 0.1), editable: true, mono: true },
     { key: "categorie",     label: "Catégorie",     value: f.categorie,                            conf: f.confidence - 0.1, editable: true },
+    { key: "exercice_rattachement", label: "Exercice", value: f.exercice_rattachement || (f.date_facture || "").slice(0, 4), conf: 1.0, editable: true, mono: true, raw: f.exercice_rattachement || (f.date_facture || "").slice(0, 4) },
+    { key: "traitement_comptable", label: "Traitement", value: f.traitement_comptable || "exercice_courant", conf: 1.0, editable: true, mono: true },
+    { key: "validation_status", label: "Validation", value: f.validation_status || "a_valider", conf: 1.0, editable: true, mono: true },
+    { key: "analyse_ai", label: "Analyse IA", value: f.analyse_ai, conf: 1.0, editable: false },
   ];
 
   return (
@@ -225,6 +375,7 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
                 onBlur={e => {
                   let v = e.target.value;
                   if (r.key === "montant_ht" || r.key === "tva_taux") v = parseFloat(v) || 0;
+                  if (r.key === "exercice_rattachement") v = parseInt(v, 10) || null;
                   onUpdate(r.key, v);
                   setEditing(null);
                 }}

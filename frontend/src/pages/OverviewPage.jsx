@@ -1,8 +1,22 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown,
+  Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
+import { exportDgiTva } from "../api";
+import { useAuth } from "../context/AuthContext";
+
+const DASHBOARD_WIDGETS = [
+  { key: "hero", label: "Vue executive", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
+  { key: "finance", label: "Tendance & balance agee", desc: "Flux d'achats et exposition fournisseurs." },
+  { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice precedent." },
+  { key: "suppliers", label: "Top fournisseurs", desc: "Concentration des achats par tiers." },
+  { key: "activity", label: "Activite du dossier", desc: "Actions recentes et signaux de suivi." },
+];
+
+function getDashboardPrefsKey(user, dossier) {
+  return `findoc:dashboard:${user?.email || "anon"}:${dossier?.id || "global"}`;
+}
 
 function MiniTrend({ data, color = "var(--accent)" }) {
   const width = 180;
@@ -99,8 +113,49 @@ function ComparaisonNvsN1({ factures }) {
   );
 }
 
-export default function OverviewPage({ factures, dossier, onNavigate }) {
+export default function OverviewPage({ factures, dossier, dossierId, onNavigate, user }) {
+  const { token } = useAuth();
   const now = new Date();
+  const [showCustomize, setShowCustomize] = useState(false);
+
+  const handleExportDgi = async () => {
+    try {
+      const annee = now.getFullYear();
+      const mois = now.getMonth() + 1;
+      const res = await exportDgiTva(token, dossierId, mois, annee);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `declaration_tva_${annee}_${String(mois).padStart(2, "0")}.csv`;
+      a.click();
+    } catch {
+      /* silent — toast géré par Dashboard */
+    }
+  };
+  const [visibleWidgets, setVisibleWidgets] = useState(() =>
+    DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {})
+  );
+
+  useEffect(() => {
+    const key = getDashboardPrefsKey(user, dossier);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: parsed?.[widget.key] !== false }), {}));
+    } catch {
+      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
+    }
+  }, [dossier, user]);
+
+  const updateWidgetVisibility = (key, checked) => {
+    const next = { ...visibleWidgets, [key]: checked };
+    setVisibleWidgets(next);
+    localStorage.setItem(getDashboardPrefsKey(user, dossier), JSON.stringify(next));
+  };
 
   const aging = useMemo(() => {
     const buckets = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
@@ -140,15 +195,145 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
     { icon: "upload", color: "", title: "Export SAGE pret", sub: "Le journal des ecritures est disponible en export", time: "Hier" },
   ];
 
+  // Alertes intelligentes calculées dynamiquement
+  const smartAlerts = useMemo(() => {
+    const alerts = [];
+    if (overdue.length > 0) {
+      const penaltyTotal = overdue.reduce((s, f) => {
+        const days = Math.max(0, (now - new Date(f.date_echeance)) / 86400000);
+        return s + (f.montant_ttc || 0) * 0.0525 * Math.max(0, days - 60) / 365;
+      }, 0);
+      alerts.push({
+        type: "neg",
+        icon: "alert",
+        msg: `${overdue.length} facture${overdue.length > 1 ? "s" : ""} en retard — pénalité Loi 69-21 estimée : ${Math.round(penaltyTotal).toLocaleString("fr-FR")} MAD`,
+        action: "relances",
+        actionLabel: "Voir les relances",
+      });
+    }
+    const aValider = factures.filter(f => f.statut === "a_valider" || f.statut === "à_valider");
+    if (aValider.length > 0) {
+      alerts.push({
+        type: "warn",
+        icon: "sparkles",
+        msg: `${aValider.length} facture${aValider.length > 1 ? "s" : ""} extraite${aValider.length > 1 ? "s" : ""} en attente de validation`,
+        action: "factures",
+        actionLabel: "Valider",
+      });
+    }
+    const lowConf = factures.filter(f => f.confidence != null && f.confidence < 0.8);
+    if (lowConf.length > 0) {
+      alerts.push({
+        type: "warn",
+        icon: "warn",
+        msg: `${lowConf.length} facture${lowConf.length > 1 ? "s" : ""} avec confiance d'extraction < 80%`,
+        action: "factures",
+        actionLabel: "Corriger",
+      });
+    }
+    const tvaSolde = factures.filter(f => f.type === "vente").reduce((s, f) => s + (f.tva || 0), 0)
+      - factures.filter(f => f.type !== "vente").reduce((s, f) => s + (f.tva || 0), 0);
+    if (tvaSolde > 10000) {
+      alerts.push({
+        type: "accent",
+        icon: "info",
+        msg: `TVA à reverser à la DGI : ${Math.round(tvaSolde).toLocaleString("fr-FR")} MAD`,
+        action: "tva",
+        actionLabel: "Voir TVA",
+      });
+    }
+    return alerts;
+  }, [factures, overdue, now]);
+
   return (
     <div className="page-inner">
-      <section
-        className="card"
-        style={{
-          padding: 28,
-          marginBottom: 16,
-        }}
-      >
+
+      {smartAlerts.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+          {smartAlerts.map((alert, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "10px 16px",
+              borderRadius: 10,
+              background: alert.type === "neg" ? "var(--neg-bg)" : alert.type === "warn" ? "var(--warn-bg)" : "var(--accent-bg)",
+              border: `1px solid color-mix(in srgb, var(--${alert.type === "accent" ? "accent" : alert.type}-ink) 20%, transparent)`,
+            }}>
+              <AlertTriangle size={14} style={{ color: `var(--${alert.type === "accent" ? "accent" : alert.type}-ink)`, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 12.5, color: `var(--${alert.type === "accent" ? "accent" : alert.type}-ink)` }}>
+                {alert.msg}
+              </span>
+              {onNavigate && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11.5, padding: "3px 10px" }}
+                  onClick={() => onNavigate(alert.action)}
+                >
+                  {alert.actionLabel}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showCustomize && (
+        <>
+          <div className="scrim" onClick={() => setShowCustomize(false)} />
+          <div className="drawer" style={{ width: 420 }}>
+            <div className="drawer-head">
+              <Settings2 size={16} style={{ color: "var(--ink-1)" }} />
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Personnaliser le dashboard</div>
+              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setShowCustomize(false)}><X size={15} /></button>
+            </div>
+            <div className="drawer-body" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+              {DASHBOARD_WIDGETS.map((widget) => (
+                <label key={widget.key} className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-start", background: "var(--bg-inset)" }}>
+                  <input
+                    type="checkbox"
+                    checked={visibleWidgets[widget.key] !== false}
+                    onChange={(event) => updateWidgetVisibility(widget.key, event.target.checked)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{widget.label}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 4 }}>{widget.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+          Choisis les blocs visibles dans ton aperçu.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary" onClick={handleExportDgi} title="Télécharger la déclaration TVA au format DGI CSV">
+            <Download size={14} />
+            Export DGI TVA
+          </button>
+          {onNavigate && (
+            <button className="btn btn-primary" onClick={() => onNavigate("rapport_mensuel")}>
+              <Sparkles size={14} />
+              Rapport IA
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={() => setShowCustomize(true)}>
+            <Settings2 size={14} />
+            Personnaliser
+          </button>
+        </div>
+      </div>
+
+      {visibleWidgets.hero !== false && (
+        <section
+          className="card"
+          style={{
+            padding: 28,
+            marginBottom: 16,
+          }}
+        >
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.9fr)", gap: 20, alignItems: "stretch" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div>
@@ -224,9 +409,11 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(340px, 0.85fr)", gap: 16, marginBottom: 16 }}>
+      {visibleWidgets.finance !== false && (
+        <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(340px, 0.85fr)", gap: 16, marginBottom: 16 }}>
         <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 }}>
             <div>
@@ -287,12 +474,15 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
             })}
           </div>
         </div>
-      </section>
+        </section>
+      )}
 
-      <ComparaisonNvsN1 factures={factures} />
+      {visibleWidgets.comparison !== false && <ComparaisonNvsN1 factures={factures} />}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
-        <div className="card" style={{ padding: 24 }}>
+      {(visibleWidgets.suppliers !== false || visibleWidgets.activity !== false) && (
+        <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
+        {visibleWidgets.suppliers !== false && (
+          <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
               <div className="kpi-label">Concentration</div>
@@ -327,9 +517,11 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
               </div>
             ))}
           </div>
-        </div>
+          </div>
+        )}
 
-        <div className="card" style={{ padding: 24 }}>
+        {visibleWidgets.activity !== false && (
+          <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
               <div className="kpi-label">Actions recentes</div>
@@ -351,8 +543,10 @@ export default function OverviewPage({ factures, dossier, onNavigate }) {
               </div>
             ))}
           </div>
-        </div>
-      </section>
+          </div>
+        )}
+        </section>
+      )}
     </div>
   );
 }
