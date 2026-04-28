@@ -438,6 +438,30 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const [tpeTransactions, setTpeTransactions] = useState([]);
   const fileRef = useRef(null);
 
+  const addUploadFiles = useCallback((files) => {
+    const incoming = [...(files || [])].filter((file) => {
+      const name = String(file.name || "").toLowerCase();
+      return (
+        file.type === "application/pdf" ||
+        file.type.startsWith("image/") ||
+        /\.(pdf|png|jpe?g)$/.test(name)
+      );
+    });
+    if (!incoming.length) return;
+    setUploadFiles((current) => {
+      const seen = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      return [
+        ...current,
+        ...incoming.filter((file) => {
+          const key = `${file.name}:${file.size}:${file.lastModified}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+      ];
+    });
+  }, []);
+
   useEffect(() => {
     try {
       setTpeTransactions(JSON.parse(localStorage.getItem(buildTpeStorageKey(dossierId)) || "[]"));
@@ -488,8 +512,8 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const handleDrop = useCallback((event) => {
     event.preventDefault();
     setDragging(false);
-    setUploadFiles([...event.dataTransfer.files].filter((file) => file.type === "application/pdf" || file.type.startsWith("image/")));
-  }, []);
+    addUploadFiles(event.dataTransfer.files);
+  }, [addUploadFiles]);
 
   const handleUpload = async () => {
     if (!uploadFiles.length) return;
@@ -694,16 +718,41 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               <div className={`dropzone${dragging ? " drag-over" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
                 <div className="dropzone-icon"><Upload size={20} /></div>
                 <div className="dropzone-title">Glissez vos factures ici</div>
-                <div className="dropzone-sub">PDF, PNG ou JPG · analyse Claude Vision</div>
-                <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: "none" }} onChange={(event) => setUploadFiles([...event.target.files])} />
+                <div className="dropzone-sub">PDF, PNG ou JPG · vous pouvez ajouter plusieurs lots</div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    addUploadFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
               </div>
               {uploadFiles.length > 0 && (
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
+                    <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{uploadFiles.length} fichier{uploadFiles.length > 1 ? "s" : ""} en attente</span>
+                    <button type="button" className="btn btn-ghost sm" onClick={() => fileRef.current?.click()}>
+                      Ajouter
+                    </button>
+                  </div>
                   {uploadFiles.map((file, index) => (
                     <div key={index} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "var(--bg-inset)", borderRadius: 8, fontSize: 12.5 }}>
                       <FileText size={13} style={{ color: "var(--accent-ink)" }} />
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
                       <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>{(file.size / 1024).toFixed(0)} Ko</span>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Retirer"
+                        onClick={() => setUploadFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                        style={{ width: 26, height: 26 }}
+                      >
+                        <X size={12} />
+                      </button>
                     </div>
                   ))}
                 </div>
