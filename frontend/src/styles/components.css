@@ -324,6 +324,7 @@
   min-height: 100vh;
   position: relative;
   overflow: hidden;
+  color: #11284d;
   background:
     radial-gradient(circle at top left, rgba(27, 99, 255, 0.08), transparent 32%),
     radial-gradient(circle at 85% 18%, rgba(27, 99, 255, 0.06), transparent 28%),
@@ -376,6 +377,31 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.home-page .btn-primary {
+  background: #1b63ff;
+  color: #ffffff;
+  border: 1px solid #1b63ff;
+}
+
+.home-page .btn-primary:hover {
+  background: #0d4fe0;
+  border-color: #0d4fe0;
+}
+
+.home-page .btn-secondary,
+.home-page .btn-ghost {
+  background: rgba(255, 255, 255, 0.8);
+  color: #11284d;
+  border: 1px solid rgba(27, 99, 255, 0.14);
+}
+
+.home-page .btn-secondary:hover,
+.home-page .btn-ghost:hover {
+  background: #ffffff;
+  color: #0d4fe0;
+  border-color: rgba(27, 99, 255, 0.28);
 }
 
 .home-main {
