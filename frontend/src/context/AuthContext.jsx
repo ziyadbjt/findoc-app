@@ -2,7 +2,12 @@ import { createContext, useContext, useState, useEffect } from "react"
 import { getMe, loginUser } from "../api"
 
 const AuthContext = createContext()
-const SKIP_LOGIN = import.meta.env.DEV || import.meta.env.VITE_SKIP_LOGIN === "true"
+const HOSTNAME = typeof window !== "undefined" ? window.location.hostname : ""
+const IS_VERCEL_PREVIEW = HOSTNAME.endsWith(".vercel.app")
+const SKIP_LOGIN =
+  import.meta.env.DEV ||
+  import.meta.env.VITE_SKIP_LOGIN === "true" ||
+  IS_VERCEL_PREVIEW
 const DEV_USER = {
   id: 1,
   email: "ziyad@cabinetchami.ma",
