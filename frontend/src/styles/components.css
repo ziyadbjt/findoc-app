@@ -1976,6 +1976,13 @@
   color: var(--ink-0);
 }
 
+.login-brand__logo {
+  display: block;
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
+}
+
 .login-help,
 .login-footer button,
 .login-contact button,
@@ -2149,6 +2156,13 @@
 .login-footer strong {
   color: var(--ink-0);
   font-size: 18px;
+}
+
+.login-footer__logo {
+  display: block;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
 }
 
 .login-footer nav {

@@ -29,7 +29,7 @@ export default function Login() {
     <div className="login-page">
       <header className="login-topbar">
         <div className="login-brand">
-          <span className="login-brand__name">FinDoc</span>
+          <img className="login-brand__logo" src="/logo-findoc.png" alt="FinDoc" />
         </div>
         <button type="button" className="login-help">Besoin d'aide ?</button>
       </header>
@@ -96,7 +96,7 @@ export default function Login() {
       </main>
 
       <footer className="login-footer">
-        <strong>FinDoc</strong>
+        <img className="login-footer__logo" src="/logo-findoc.png" alt="FinDoc" />
         <nav aria-label="Liens légaux">
           <button type="button">Mentions légales</button>
           <button type="button">Confidentialité</button>
