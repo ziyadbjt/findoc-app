@@ -1,23 +1,87 @@
-import { ArrowRight, Bot, ChartNoAxesCombined, FileSearch, ShieldCheck } from "lucide-react"
+import {
+  ArrowRight,
+  FileText,
+  Zap,
+  ShieldCheck,
+  TrendingUp,
+  Bell,
+  RefreshCw,
+  Clock,
+  CheckCircle2,
+  Star,
+} from "lucide-react"
 import { Link } from "react-router-dom"
 import BrandLogo from "../components/BrandLogo"
 
-const highlights = [
+const stats = [
+  { value: "3×", label: "Plus rapide qu'une saisie manuelle" },
+  { value: "<30s", label: "Par facture traitée par l'IA" },
+  { value: "100%", label: "Conforme Loi 69-21 & PCM Maroc" },
+  { value: "0", label: "Erreur de TVA non détectée" },
+]
+
+const features = [
   {
-    icon: <FileSearch size={18} />,
-    title: "Lecture documentaire",
-    text: "Importer des pièces et structurer l’information plus vite.",
+    icon: <FileText size={20} />,
+    tag: "Extraction IA",
+    title: "Vos factures lues en 3 secondes",
+    text: "Importez un PDF ou une image. FinDoc extrait fournisseur, montant HT, TVA, date d'échéance et génère l'écriture PCM automatiquement. Zéro ressaisie.",
   },
   {
-    icon: <ChartNoAxesCombined size={18} />,
-    title: "Pilotage clair",
-    text: "Suivre TVA, rapprochement et indicateurs depuis un même espace.",
+    icon: <Zap size={20} />,
+    tag: "Journal comptable",
+    title: "Écritures générées selon le PCM marocain",
+    text: "Chaque facture produit des écritures 401100 / 344100 / 512100 directement exploitables. Distingue achats locaux (FL), étrangers (FE) et ventes clients (CL).",
   },
   {
-    icon: <Bot size={18} />,
-    title: "IA utile",
-    text: "Faire ressortir anomalies, signaux faibles et prochaines actions.",
+    icon: <Bell size={20} />,
+    tag: "Loi 69-21",
+    title: "Alertes avant les pénalités",
+    text: "FinDoc surveille chaque échéance et calcule les pénalités de retard dès le 61e jour. Vos clients reçoivent des relances automatiques avant que ça coûte cher.",
   },
+  {
+    icon: <TrendingUp size={20} />,
+    tag: "Tableau de bord",
+    title: "TVA, tréso et marges en un coup d'œil",
+    text: "Dashboard temps réel : TVA collectée vs déductible, solde de trésorerie, factures en retard, et indicateurs financiers clés — sans ouvrir Excel.",
+  },
+  {
+    icon: <RefreshCw size={20} />,
+    tag: "Rapprochement bancaire",
+    title: "Reliez relevés et factures sans effort",
+    text: "Glissez votre relevé bancaire. FinDoc propose les associations automatiquement. Vous validez en un clic. Le compte 512100 est toujours à jour.",
+  },
+  {
+    icon: <ShieldCheck size={20} />,
+    tag: "Audit & anomalies",
+    title: "Rien ne passe entre les mailles",
+    text: "Détection des doublons, TVA incohérente, fournisseurs inconnus. Piste d'audit complète pour chaque écriture. Votre cabinet est couvert.",
+  },
+]
+
+const steps = [
+  {
+    n: "01",
+    title: "Importez vos pièces",
+    text: "PDF, JPG, XML — FinDoc accepte tout. Glissez une facture ou un relevé bancaire.",
+  },
+  {
+    n: "02",
+    title: "L'IA extrait et comptabilise",
+    text: "Montants, comptes PCM, TVA, code tiers — tout est extrait et journalisé en quelques secondes.",
+  },
+  {
+    n: "03",
+    title: "Pilotez depuis le dashboard",
+    text: "Tableau de bord en temps réel, alertes de délais, relances clients, export XLSX prêt.",
+  },
+]
+
+const proof = [
+  { value: "16", label: "factures traitées dans la démo" },
+  { value: "52", label: "écritures générées automatiquement" },
+  { value: "4", label: "retards détectés & pénalisés en temps réel" },
+  { value: "3", label: "modules de déclaration (TVA · IS · IR)" },
 ]
 
 export default function Home() {
@@ -29,7 +93,10 @@ export default function Home() {
         <Link to="/" className="home-brand" aria-label="FinDoc accueil">
           <BrandLogo className="home-brand__logo" surface="marketing" />
         </Link>
-
+        <nav className="home-nav">
+          <a href="#features" className="home-nav__link">Fonctionnalités</a>
+          <a href="#how" className="home-nav__link">Comment ça marche</a>
+        </nav>
         <div className="home-topbar__actions">
           <Link to="/dossiers" className="btn btn-primary">
             Voir la démo
@@ -39,69 +106,150 @@ export default function Home() {
       </header>
 
       <main className="home-main">
+
+        {/* HERO */}
         <section className="home-hero home-hero--simple">
           <div className="home-hero__copy">
-            <span className="home-pill">Plateforme comptable augmentée</span>
+            <span className="home-pill">
+              <Star size={10} style={{ marginRight: 5 }} />
+              Plateforme comptable · Maroc · Loi 69-21
+            </span>
 
             <h1 className="home-title">
-              FinDoc centralise les dossiers, automatise la lecture des pièces et rend le suivi plus lisible.
+              Clôturez plus vite.<br />
+              Relancez à temps.<br />
+              <span className="home-title__accent">Dormez tranquille.</span>
             </h1>
 
             <p className="home-subtitle">
-              Une interface simple pour montrer le produit sans surcharge: un message clair, quelques bénéfices
-              concrets et un accès direct à l’application.
+              FinDoc lit vos factures par IA, génère les écritures PCM, surveille vos délais
+              et vous alerte avant que les pénalités s'accumulent — en quelques secondes par pièce.
             </p>
 
             <div className="home-cta">
               <Link to="/dossiers" className="btn btn-primary lg">
-                Accéder à la plateforme
+                Accéder à la démo gratuite
                 <ArrowRight size={16} />
               </Link>
+              <a href="#features" className="btn btn-ghost lg">
+                Découvrir les fonctionnalités
+              </a>
+            </div>
+
+            <div className="home-trust">
+              <CheckCircle2 size={13} className="home-trust__icon" />
+              <span>Aucun compte requis · Données de démo incluses · 100% marocain</span>
             </div>
           </div>
 
-          <aside className="home-showcase home-showcase--simple" aria-label="Aperçu produit">
-            <div className="home-showcase__card home-showcase__card--primary">
-              <span className="home-showcase__eyebrow">Modules visibles</span>
-              <h2>Une démo courte, propre et directement actionnable.</h2>
-              <div className="home-showcase__stack home-showcase__stack--single">
-                <div className="home-module-chip">Dossiers clients</div>
-                <div className="home-module-chip">Dashboard financier</div>
-                <div className="home-module-chip">Rapprochement bancaire</div>
-                <div className="home-module-chip">Anomalies & relances</div>
+          <aside className="home-hero__visual" aria-label="Aperçu chiffres clés">
+            <div className="home-stat-card">
+              <div className="home-stat-card__header">
+                <span className="home-stat-card__dot" />
+                <span className="home-stat-card__label">Atlas Industries SA · Tableau de bord</span>
+              </div>
+              <div className="home-stat-grid">
+                {proof.map((p) => (
+                  <div key={p.label} className="home-stat-item">
+                    <span className="home-stat-item__value">{p.value}</span>
+                    <span className="home-stat-item__label">{p.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="home-stat-card__footer">
+                <div className="home-alert-row">
+                  <span className="home-alert-dot home-alert-dot--warn" />
+                  <span>4 factures en retard · pénalités calculées</span>
+                </div>
+                <div className="home-alert-row">
+                  <span className="home-alert-dot home-alert-dot--pos" />
+                  <span>TVA déductible · solde à jour</span>
+                </div>
+                <div className="home-alert-row">
+                  <span className="home-alert-dot home-alert-dot--pos" />
+                  <span>Rapprochement bancaire · 0 écart</span>
+                </div>
               </div>
             </div>
           </aside>
         </section>
 
-        <section className="home-section home-section--compact">
-          <div className="home-highlights">
-            {highlights.map((item) => (
-              <article key={item.title} className="home-highlight">
-                <div className="home-highlight__icon">{item.icon}</div>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
+        {/* STATS BAR */}
+        <section className="home-stats-bar">
+          {stats.map((s) => (
+            <div key={s.label} className="home-stat-bar-item">
+              <span className="home-stat-bar-item__value">{s.value}</span>
+              <span className="home-stat-bar-item__label">{s.label}</span>
+            </div>
+          ))}
+        </section>
+
+        {/* FEATURES */}
+        <section className="home-section" id="features">
+          <div className="home-section__head">
+            <span className="home-pill">Ce que FinDoc fait pour vous</span>
+            <h2>Tout ce qu'un cabinet perd du temps à faire manuellement,<br />FinDoc le fait automatiquement.</h2>
+          </div>
+          <div className="home-features-grid">
+            {features.map((f) => (
+              <article key={f.title} className="home-feature-card">
+                <div className="home-feature-card__top">
+                  <div className="home-highlight__icon">{f.icon}</div>
+                  <span className="home-feature-tag">{f.tag}</span>
+                </div>
+                <h3>{f.title}</h3>
+                <p>{f.text}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="home-banner home-banner--simple">
-          <div>
-            <h2>Entrer dans la démo et parcourir le produit en quelques clics.</h2>
+        {/* HOW IT WORKS */}
+        <section className="home-section" id="how">
+          <div className="home-section__head">
+            <span className="home-pill">En 3 étapes</span>
+            <h2>De la facture brute au bilan propre,<br />sans friction.</h2>
+          </div>
+          <div className="home-steps">
+            {steps.map((s, i) => (
+              <div key={s.n} className="home-step">
+                <div className="home-step__number">{s.n}</div>
+                <div className="home-step__body">
+                  <h3>{s.title}</h3>
+                  <p>{s.text}</p>
+                </div>
+                {i < steps.length - 1 && <div className="home-step__arrow"><ArrowRight size={18} /></div>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* FINAL CTA */}
+        <section className="home-banner home-banner--cta">
+          <div className="home-banner__copy">
+            <span className="home-pill">Démo disponible maintenant</span>
+            <h2>Voyez FinDoc en action.<br />Dossier réel, données réelles.</h2>
+            <p>Parcourez un cabinet complet : 16 factures, 52 écritures, tableau de bord, relances et exports — sans rien configurer.</p>
           </div>
           <div className="home-banner__actions">
-            <Link to="/dossiers" className="btn btn-primary">
-              Ouvrir FinDoc
-              <ArrowRight size={15} />
+            <Link to="/dossiers" className="btn btn-primary lg">
+              Ouvrir FinDoc maintenant
+              <ArrowRight size={16} />
             </Link>
             <div className="home-banner__note">
               <ShieldCheck size={14} />
-              Version épurée pour une première impression plus nette.
+              Données démo · Aucun engagement
             </div>
           </div>
         </section>
+
       </main>
+
+      <footer className="home-footer">
+        <span>© 2025 FinDoc · Plateforme comptable marocaine</span>
+        <span className="home-footer__sep">·</span>
+        <span>Conforme PCM · Loi 69-21 · TVA</span>
+      </footer>
     </div>
   )
 }
