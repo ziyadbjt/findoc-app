@@ -16,7 +16,7 @@ import BrandLogo from "../components/BrandLogo"
 const stats = [
   { value: "3×", label: "Plus rapide qu'une saisie manuelle" },
   { value: "<30s", label: "Par facture traitée par l'IA" },
-  { value: "100%", label: "Conforme Loi 69-21 & PCM Maroc" },
+  { value: "100%", label: "Conformité réglementaire garantie" },
   { value: "0", label: "Erreur de TVA non détectée" },
 ]
 
@@ -25,35 +25,35 @@ const features = [
     icon: <FileText size={20} />,
     tag: "Extraction IA",
     title: "Vos factures lues en 3 secondes",
-    text: "Importez un PDF ou une image. FinDoc extrait fournisseur, montant HT, TVA, date d'échéance et génère l'écriture PCM automatiquement. Zéro ressaisie.",
+    text: "Importez un PDF ou une image. FinDoc extrait fournisseur, montant HT, TVA et date d'échéance automatiquement. Zéro ressaisie.",
   },
   {
     icon: <Zap size={20} />,
     tag: "Journal comptable",
-    title: "Écritures générées selon le PCM marocain",
-    text: "Chaque facture produit des écritures 401100 / 344100 / 512100 directement exploitables. Distingue achats locaux (FL), étrangers (FE) et ventes clients (CL).",
+    title: "Écritures générées instantanément",
+    text: "Chaque facture produit des écritures comptables directement exploitables, classées par fournisseur, type d'achat et nature de la dépense.",
   },
   {
     icon: <Bell size={20} />,
-    tag: "Loi 69-21",
+    tag: "Délais de paiement",
     title: "Alertes avant les pénalités",
-    text: "FinDoc surveille chaque échéance et calcule les pénalités de retard dès le 61e jour. Vos clients reçoivent des relances automatiques avant que ça coûte cher.",
+    text: "FinDoc surveille chaque échéance et calcule les pénalités de retard automatiquement. Vos clients reçoivent des relances avant que ça coûte cher.",
   },
   {
     icon: <TrendingUp size={20} />,
     tag: "Tableau de bord",
-    title: "TVA, tréso et marges en un coup d'œil",
-    text: "Dashboard temps réel : TVA collectée vs déductible, solde de trésorerie, factures en retard, et indicateurs financiers clés — sans ouvrir Excel.",
+    title: "TVA, tréso et marges en un coup d'oeil",
+    text: "Dashboard temps réel : TVA collectée vs déductible, solde de trésorerie, factures en retard et indicateurs financiers clés, sans ouvrir Excel.",
   },
   {
     icon: <RefreshCw size={20} />,
     tag: "Rapprochement bancaire",
     title: "Reliez relevés et factures sans effort",
-    text: "Glissez votre relevé bancaire. FinDoc propose les associations automatiquement. Vous validez en un clic. Le compte 512100 est toujours à jour.",
+    text: "Glissez votre relevé bancaire. FinDoc propose les associations automatiquement. Vous validez en un clic. Votre trésorerie est toujours à jour.",
   },
   {
     icon: <ShieldCheck size={20} />,
-    tag: "Audit & anomalies",
+    tag: "Audit et anomalies",
     title: "Rien ne passe entre les mailles",
     text: "Détection des doublons, TVA incohérente, fournisseurs inconnus. Piste d'audit complète pour chaque écriture. Votre cabinet est couvert.",
   },
@@ -63,25 +63,25 @@ const steps = [
   {
     n: "01",
     title: "Importez vos pièces",
-    text: "PDF, JPG, XML — FinDoc accepte tout. Glissez une facture ou un relevé bancaire.",
+    text: "PDF, JPG, XML, FinDoc accepte tout. Glissez une facture ou un relevé bancaire.",
   },
   {
     n: "02",
     title: "L'IA extrait et comptabilise",
-    text: "Montants, comptes PCM, TVA, code tiers — tout est extrait et journalisé en quelques secondes.",
+    text: "Montants, comptes, TVA, tout est extrait et journalisé en quelques secondes.",
   },
   {
     n: "03",
     title: "Pilotez depuis le dashboard",
-    text: "Tableau de bord en temps réel, alertes de délais, relances clients, export XLSX prêt.",
+    text: "Tableau de bord en temps réel, alertes de délais, relances clients, export prêt.",
   },
 ]
 
 const proof = [
   { value: "16", label: "factures traitées dans la démo" },
   { value: "52", label: "écritures générées automatiquement" },
-  { value: "4", label: "retards détectés & pénalisés en temps réel" },
-  { value: "3", label: "modules de déclaration (TVA · IS · IR)" },
+  { value: "4", label: "retards détectés en temps réel" },
+  { value: "3", label: "modules de déclaration fiscale" },
 ]
 
 export default function Home() {
@@ -112,7 +112,7 @@ export default function Home() {
           <div className="home-hero__copy">
             <span className="home-pill">
               <Star size={10} style={{ marginRight: 5 }} />
-              Plateforme comptable · Maroc · Loi 69-21
+              Plateforme comptable · Maroc
             </span>
 
             <h1 className="home-title">
@@ -122,8 +122,8 @@ export default function Home() {
             </h1>
 
             <p className="home-subtitle">
-              FinDoc lit vos factures par IA, génère les écritures PCM, surveille vos délais
-              et vous alerte avant que les pénalités s'accumulent — en quelques secondes par pièce.
+              FinDoc lit vos factures par IA, génère les écritures comptables, surveille vos délais
+              et vous alerte avant que les pénalités s'accumulent. En quelques secondes par pièce.
             </p>
 
             <div className="home-cta">
@@ -229,7 +229,7 @@ export default function Home() {
           <div className="home-banner__copy">
             <span className="home-pill">Démo disponible maintenant</span>
             <h2>Voyez FinDoc en action.<br />Dossier réel, données réelles.</h2>
-            <p>Parcourez un cabinet complet : 16 factures, 52 écritures, tableau de bord, relances et exports — sans rien configurer.</p>
+            <p>Parcourez un cabinet complet : 16 factures, 52 écritures, tableau de bord, relances et exports. Sans rien configurer.</p>
           </div>
           <div className="home-banner__actions">
             <Link to="/dossiers" className="btn btn-primary lg">
@@ -248,7 +248,7 @@ export default function Home() {
       <footer className="home-footer">
         <span>© 2025 FinDoc · Plateforme comptable marocaine</span>
         <span className="home-footer__sep">·</span>
-        <span>Conforme PCM · Loi 69-21 · TVA</span>
+        <span>Plateforme comptable pour le Maroc</span>
       </footer>
     </div>
   )
