@@ -38,7 +38,8 @@ function sqlQuery(sql, params = []) {
 import sqlite3, json
 conn = sqlite3.connect(${JSON.stringify(DB_PATH)})
 conn.row_factory = sqlite3.Row
-cur = conn.execute(${JSON.stringify(sql)}, ${JSON.stringify(params)})
+params = json.loads(${JSON.stringify(JSON.stringify(params))})
+cur = conn.execute(${JSON.stringify(sql)}, params)
 rows = [dict(r) for r in cur.fetchall()]
 conn.commit()
 conn.close()
@@ -57,7 +58,8 @@ function sqlRun(sql, params = []) {
   const script = `
 import sqlite3, json
 conn = sqlite3.connect(${JSON.stringify(DB_PATH)})
-cur = conn.execute(${JSON.stringify(sql)}, ${JSON.stringify(params)})
+params = json.loads(${JSON.stringify(JSON.stringify(params))})
+cur = conn.execute(${JSON.stringify(sql)}, params)
 conn.commit()
 rowid = cur.lastrowid
 conn.close()
@@ -164,6 +166,162 @@ function calculerPenalite(montantTtc, retardJours, tauxAnnuel = 2.25) {
   const retard = Number(retardJours || 0);
   if (!montant || !retard) return 0;
   return (montant * (tauxAnnuel / 100) * retard) / 365;
+}
+
+function normalizeDate(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{4})$/);
+  if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return raw;
+}
+
+function toMoney(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100) / 100;
+  if (value == null) return null;
+  const cleaned = String(value)
+    .replace(/\u00a0/g, "")
+    .replace(/MAD|DHS|DH|درهم/gi, "")
+    .replace(/\s/g, "")
+    .replace(/,/g, ".");
+  const normalized = cleaned.replace(/[^0-9.-]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
+}
+
+function ensureInvoiceTotals(data) {
+  const ttc = toMoney(data.montant_ttc);
+  let ht = toMoney(data.montant_ht);
+  let tva = toMoney(data.tva);
+  if (ht == null && ttc != null && tva != null) ht = Math.max(0, Math.round((ttc - tva) * 100) / 100);
+  if (ttc == null && ht != null && tva != null) data.montant_ttc = Math.round((ht + tva) * 100) / 100;
+  if (ht == null && ttc != null) ht = Math.round((ttc / 1.2) * 100) / 100;
+  if (tva == null && ttc != null && ht != null) tva = Math.round((ttc - ht) * 100) / 100;
+  data.montant_ht = ht ?? 0;
+  data.tva = tva ?? 0;
+  data.montant_ttc = toMoney(data.montant_ttc) ?? Math.round((data.montant_ht + data.tva) * 100) / 100;
+  return data;
+}
+
+function parseClaudeJson(text) {
+  const cleaned = String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+  return JSON.parse(cleaned);
+}
+
+function fallbackExtractInvoice(file) {
+  const stem = path.basename(file.originalname || "facture", path.extname(file.originalname || ""));
+  const text = file.buffer.toString("utf8").slice(0, 6000);
+  const amountCandidates = [...text.matchAll(/(\d[\d\s.,]{2,})/g)]
+    .map((match) => toMoney(match[1]))
+    .filter((value) => value && value > 0 && value < 100000000);
+  const montantTtc = amountCandidates.length ? Math.max(...amountCandidates) : 0;
+  const today = new Date();
+  const due = new Date(today);
+  due.setDate(due.getDate() + 60);
+  return ensureInvoiceTotals({
+    fournisseur: stem.replace(/[_-]+/g, " ").toUpperCase(),
+    code_tiers: `FL${stem.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || "FACTURE"}`,
+    num_facture: stem,
+    date_facture: today.toISOString().slice(0, 10),
+    date_echeance: due.toISOString().slice(0, 10),
+    montant_ttc: montantTtc,
+    type: "achat",
+    paiement: "en_attente",
+    statut: "traite",
+    confidence: 0.35,
+    compte_pcm: "6111000",
+    categorie: "A verifier",
+    source_ai: "fallback",
+    texte_source: text,
+  });
+}
+
+async function extractInvoiceWithClaude(file) {
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
+  if (!apiKey || !file?.buffer?.length) return null;
+  if (file.buffer.length > 30 * 1024 * 1024) return null;
+
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const mediaType = file.mimetype || (ext === ".pdf" ? "application/pdf" : "image/jpeg");
+  if (mediaType !== "application/pdf" && !mediaType.startsWith("image/")) return null;
+
+  const source = {
+    type: "base64",
+    media_type: mediaType,
+    data: file.buffer.toString("base64"),
+  };
+  const mediaBlock = mediaType === "application/pdf"
+    ? { type: "document", source }
+    : { type: "image", source };
+
+  const prompt = [
+    "Tu es un expert-comptable marocain. Lis cette facture et retourne uniquement un JSON valide.",
+    "Champs: fournisseur, code_tiers, num_facture, date_facture, date_echeance, montant_ht, tva, montant_ttc, type, paiement, categorie, compte_pcm.",
+    "Formats: dates YYYY-MM-DD, type achat ou vente, paiement en_attente par defaut.",
+    "Si une information manque, mets null. Ne rajoute aucun texte hors JSON.",
+    `Nom du fichier: ${file.originalname || "facture"}`,
+  ].join("\n");
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      max_tokens: 1400,
+      messages: [{ role: "user", content: [mediaBlock, { type: "text", text: prompt }] }],
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Anthropic invoice error ${response.status}`);
+  const payload = await response.json();
+  const text = payload?.content?.find((part) => part.type === "text")?.text || "";
+  const data = parseClaudeJson(text);
+  return ensureInvoiceTotals({
+    fournisseur: data.fournisseur || path.basename(file.originalname || "Facture"),
+    code_tiers: data.code_tiers || `FL${String(data.fournisseur || "FACT").replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`,
+    num_facture: data.num_facture || path.basename(file.originalname || "Facture", ext),
+    date_facture: normalizeDate(data.date_facture) || new Date().toISOString().slice(0, 10),
+    date_echeance: normalizeDate(data.date_echeance),
+    montant_ht: data.montant_ht,
+    tva: data.tva,
+    montant_ttc: data.montant_ttc,
+    type: data.type === "vente" ? "vente" : "achat",
+    paiement: data.paiement || "en_attente",
+    categorie: data.categorie || "A verifier",
+    compte_pcm: data.compte_pcm || (data.type === "vente" ? "7111000" : "6111000"),
+    statut: "traite",
+    confidence: 0.92,
+    source_ai: "claude_vision",
+    texte_source: JSON.stringify(data).slice(0, 6000),
+  });
+}
+
+function buildEcrituresForInvoice(facture) {
+  const ht = Number(facture.montant_ht || 0);
+  const tva = Number(facture.tva || 0);
+  const ttc = Number(facture.montant_ttc || 0);
+  if (facture.type === "vente") {
+    return [
+      { compte_pcm: "342100", libelle: facture.fournisseur, debit: ttc, credit: 0 },
+      ...(tva ? [{ compte_pcm: "342200", libelle: `TVA coll. - ${facture.fournisseur}`, debit: 0, credit: tva }] : []),
+      { compte_pcm: facture.compte_pcm || "7111000", libelle: `Vente - ${facture.fournisseur}`, debit: 0, credit: ht },
+    ];
+  }
+  return [
+    { compte_pcm: facture.compte_pcm || "6111000", libelle: facture.fournisseur, debit: ht, credit: 0 },
+    ...(tva ? [{ compte_pcm: "344100", libelle: `TVA ded. - ${facture.fournisseur}`, debit: tva, credit: 0 }] : []),
+    { compte_pcm: "401100", libelle: facture.fournisseur, debit: 0, credit: ttc },
+  ];
 }
 
 function buildChatContext(dossierId) {
@@ -376,6 +534,10 @@ const DEMO_DOSSIER = {
   created_at: new Date().toISOString(),
 };
 const memDossiers = [{ ...DEMO_DOSSIER }];
+const memFactures = [];
+const memEcritures = [];
+let nextFactureId = 1;
+let nextEcritureId = 1;
 
 const ROLES = ["admin", "collab", "invite"];
 const USERS = {
@@ -633,23 +795,134 @@ app.get("/factures/:dossier_id", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
   const rows = sqlQuery("SELECT * FROM factures WHERE dossier_id=? ORDER BY date_facture DESC", [req.params.dossier_id]);
-  res.json(rows || []);
+  const memoryRows = memFactures.filter((facture) => Number(facture.dossier_id) === Number(req.params.dossier_id));
+  res.json([...(rows || []), ...memoryRows].sort((a, b) => String(b.date_facture || "").localeCompare(String(a.date_facture || ""))));
 });
 
 app.get("/factures/:dossier_id/ecritures", (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
-  const factureIds = (sqlQuery("SELECT id FROM factures WHERE dossier_id=?", [req.params.dossier_id]) || []).map((row) => row.id);
-  if (!factureIds.length) return res.json([]);
+  const dbFactureIds = sqlQuery("SELECT id FROM factures WHERE dossier_id=?", [req.params.dossier_id]);
+  const memoryFactureIds = memFactures
+    .filter((facture) => Number(facture.dossier_id) === Number(req.params.dossier_id))
+    .map((facture) => Number(facture.id));
+  const memoryRows = memEcritures.filter((row) => memoryFactureIds.includes(Number(row.facture_id)));
+  if (!dbFactureIds) return res.json(memoryRows);
+  const factureIds = dbFactureIds.map((row) => row.id);
+  if (!factureIds.length) return res.json(memoryRows);
   const placeholders = factureIds.map(() => "?").join(",");
   const rows = sqlQuery(`SELECT * FROM ecritures WHERE facture_id IN (${placeholders}) ORDER BY id`, factureIds);
-  res.json(rows || []);
+  res.json([...(rows || []), ...memoryRows]);
 });
 
-app.post("/factures/:dossier_id/upload", upload.array("files"), (req, res) => {
+app.post("/factures/:dossier_id/upload", upload.array("files"), async (req, res) => {
   const email = requireAuth(req, res);
   if (!email) return;
-  res.json({ total: 0, resultats: [], message: "Utilisez le backend Python pour l'extraction PDF." });
+  const files = Array.isArray(req.files) ? req.files : [];
+  if (!files.length) return res.status(400).json({ detail: "Aucun fichier recu" });
+
+  const resultats = [];
+
+  for (const file of files) {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    if (![".pdf", ".png", ".jpg", ".jpeg"].includes(ext)) {
+      resultats.push({ fichier: file.originalname || "fichier", statut: "erreur" });
+      continue;
+    }
+
+    let extracted;
+    try {
+      extracted = await extractInvoiceWithClaude(file);
+    } catch (error) {
+      console.error("[invoice extraction error]", error?.message);
+      extracted = null;
+    }
+    extracted = extracted || fallbackExtractInvoice(file);
+
+    const baseFacture = {
+      dossier_id: Number(req.params.dossier_id),
+      nom_fichier: file.originalname || `facture-${Date.now()}${ext}`,
+      stored_filename: null,
+      fournisseur: extracted.fournisseur || "Fournisseur a verifier",
+      code_tiers: extracted.code_tiers || "FLAVERI",
+      montant_ht: Number(extracted.montant_ht || 0),
+      tva: Number(extracted.tva || 0),
+      montant_ttc: Number(extracted.montant_ttc || 0),
+      date_facture: extracted.date_facture || new Date().toISOString().slice(0, 10),
+      statut: "traite",
+      created_at: new Date().toISOString(),
+      type: extracted.type || "achat",
+      paiement: extracted.paiement || "en_attente",
+      num_facture: extracted.num_facture || path.basename(file.originalname || "facture", ext),
+      date_echeance: extracted.date_echeance || null,
+      confidence: extracted.confidence || 0.35,
+      categorie: extracted.categorie || "A verifier",
+      compte_pcm: extracted.compte_pcm || ((extracted.type === "vente") ? "7111000" : "6111000"),
+      exercice_rattachement: extracted.exercice_rattachement || null,
+      traitement_comptable: extracted.traitement_comptable || "a_verifier",
+      analyse_ai: extracted.source_ai === "claude_vision" ? "Extraction Claude Vision" : "Extraction fallback a verifier",
+      validation_status: extracted.source_ai === "claude_vision" ? "a_valider" : "a_verifier",
+      texte_source: extracted.texte_source || null,
+      ocr_payload: null,
+    };
+
+    const insert = sqlRun(
+      `
+      INSERT INTO factures (
+        dossier_id, nom_fichier, stored_filename, fournisseur, code_tiers, montant_ht, tva, montant_ttc,
+        date_facture, statut, created_at, type, paiement, num_facture, date_echeance, confidence,
+        categorie, compte_pcm, exercice_rattachement, traitement_comptable, analyse_ai,
+        validation_status, texte_source, ocr_payload
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        baseFacture.dossier_id, baseFacture.nom_fichier, baseFacture.stored_filename, baseFacture.fournisseur,
+        baseFacture.code_tiers, baseFacture.montant_ht, baseFacture.tva, baseFacture.montant_ttc,
+        baseFacture.date_facture, baseFacture.statut, baseFacture.created_at, baseFacture.type,
+        baseFacture.paiement, baseFacture.num_facture, baseFacture.date_echeance, baseFacture.confidence,
+        baseFacture.categorie, baseFacture.compte_pcm, baseFacture.exercice_rattachement,
+        baseFacture.traitement_comptable, baseFacture.analyse_ai, baseFacture.validation_status,
+        baseFacture.texte_source, baseFacture.ocr_payload,
+      ]
+    );
+
+    const facture = { ...baseFacture, id: insert?.lastrowid || nextFactureId++ };
+    const ecritures = buildEcrituresForInvoice(facture);
+
+    if (insert?.lastrowid) {
+      ecritures.forEach((row) => {
+        sqlRun(
+          "INSERT INTO ecritures (facture_id, compte_pcm, libelle, debit, credit, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+          [facture.id, row.compte_pcm, row.libelle, row.debit, row.credit]
+        );
+      });
+    } else {
+      memFactures.push(facture);
+      ecritures.forEach((row) => {
+        memEcritures.push({
+          id: nextEcritureId++,
+          facture_id: facture.id,
+          ...row,
+          created_at: new Date().toISOString(),
+        });
+      });
+    }
+
+    resultats.push({
+      id: facture.id,
+      fichier: facture.nom_fichier,
+      fournisseur: facture.fournisseur,
+      num_facture: facture.num_facture,
+      montant_ttc: facture.montant_ttc,
+      statut: "traite",
+      source_ai: extracted.source_ai,
+      confiance: facture.confidence,
+    });
+  }
+
+  logAction(email, "upload_facture", "dossier", req.params.dossier_id, `${resultats.length} fichier(s) importe(s)`, req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
+  res.json({ total: files.length, resultats });
 });
 
 app.post("/dossiers/extract-societe", upload.single("file"), (req, res) => {
