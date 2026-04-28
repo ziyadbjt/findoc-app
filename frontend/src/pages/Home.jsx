@@ -25,9 +25,10 @@ export default function Home() {
       <div className="home-background" aria-hidden="true" />
 
       <header className="home-topbar">
-        <Link to="/" className="home-wordmark" aria-label="FinDoc accueil">
-          <span className="home-wordmark__mark">F</span>
-          <span className="home-wordmark__text">FinDoc</span>
+        <Link to="/" className="home-brand" aria-label="FinDoc accueil">
+          <span className="home-brand__badge">
+            <img className="home-brand__logo" src="/logo-findoc.png" alt="FinDoc" />
+          </span>
         </Link>
 
         <div className="home-topbar__actions">
