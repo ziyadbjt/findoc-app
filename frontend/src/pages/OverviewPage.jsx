@@ -3,8 +3,6 @@ import {
   Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
-import { exportDgiTva } from "../api";
-import { useAuth } from "../context/AuthContext";
 
 const DASHBOARD_WIDGETS = [
   { key: "hero", label: "Vue executive", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
@@ -114,24 +112,8 @@ function ComparaisonNvsN1({ factures }) {
 }
 
 export default function OverviewPage({ factures, dossier, dossierId, onNavigate, user }) {
-  const { token } = useAuth();
   const now = new Date();
   const [showCustomize, setShowCustomize] = useState(false);
-
-  const handleExportDgi = async () => {
-    try {
-      const annee = now.getFullYear();
-      const mois = now.getMonth() + 1;
-      const res = await exportDgiTva(token, dossierId, mois, annee);
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `declaration_tva_${annee}_${String(mois).padStart(2, "0")}.csv`;
-      a.click();
-    } catch {
-      /* silent — toast géré par Dashboard */
-    }
-  };
   const [visibleWidgets, setVisibleWidgets] = useState(() =>
     DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {})
   );
@@ -309,10 +291,6 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
           Choisis les blocs visibles dans ton aperçu.
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary" onClick={handleExportDgi} title="Télécharger la déclaration TVA au format DGI CSV">
-            <Download size={14} />
-            Export DGI TVA
-          </button>
           {onNavigate && (
             <button className="btn btn-primary" onClick={() => onNavigate("rapport_mensuel")}>
               <Sparkles size={14} />
