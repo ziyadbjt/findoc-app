@@ -2,9 +2,9 @@ export default function BrandLogo({ surface = "app", theme = "dark", className =
   let src = "/logo-findoc-mono.png";
 
   if (surface === "marketing") {
-    src = "/logo-findoc-day.png";
+    src = "/logo-findoc-day-v2.png";
   } else if (surface === "auth") {
-    src = theme === "light" ? "/logo-findoc-day.png" : "/logo-findoc-night.png";
+    src = theme === "light" ? "/logo-findoc-day-v2.png" : "/logo-findoc-night.png";
   } else if (surface === "app") {
     src = theme === "light" ? "/logo-findoc-mono.png" : "/logo-findoc-night.png";
   }
