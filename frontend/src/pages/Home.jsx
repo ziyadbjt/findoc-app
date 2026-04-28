@@ -26,9 +26,7 @@ export default function Home() {
 
       <header className="home-topbar">
         <Link to="/" className="home-brand" aria-label="FinDoc accueil">
-          <span className="home-brand__badge">
-            <img className="home-brand__logo" src="/logo-findoc.png" alt="FinDoc" />
-          </span>
+          <img className="home-brand__logo" src="/logo-findoc-transparent.png" alt="FinDoc" />
         </Link>
 
         <div className="home-topbar__actions">
