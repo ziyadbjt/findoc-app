@@ -1,5 +1,6 @@
 import { ArrowRight, Bot, ChartNoAxesCombined, FileSearch, ShieldCheck } from "lucide-react"
 import { Link } from "react-router-dom"
+import BrandLogo from "../components/BrandLogo"
 
 const highlights = [
   {
@@ -26,7 +27,7 @@ export default function Home() {
 
       <header className="home-topbar">
         <Link to="/" className="home-brand" aria-label="FinDoc accueil">
-          <img className="home-brand__logo" src="/logo-findoc-transparent.png" alt="FinDoc" />
+          <BrandLogo className="home-brand__logo" surface="marketing" />
         </Link>
 
         <div className="home-topbar__actions">

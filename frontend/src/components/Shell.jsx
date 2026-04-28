@@ -5,6 +5,7 @@ import {
   Sparkles, AlertTriangle, Download, X, Plus, Send,
   Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
+import BrandLogo from "./BrandLogo";
 
 export function DossierAvatar({ dossier, size = 28 }) {
   const hue = dossier?.hue ?? 28;
@@ -60,8 +61,7 @@ export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLo
     <header className="topnav">
       {/* Brand */}
       <div className="topnav-brand">
-        <div className="brand-mark" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>F</div>
-        <span className="brand-name" style={{ fontSize: 15, letterSpacing: "0.12em" }}>Findoc</span>
+        <BrandLogo className="topnav-brand__logo" surface="app" theme={theme} />
       </div>
 
       {/* Dossier switcher */}

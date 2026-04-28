@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Lock, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import BrandLogo from "../components/BrandLogo";
 
 export default function Login() {
   const [email, setEmail] = useState("ziyad@cabinetchami.ma");
@@ -10,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
+  const theme = document.documentElement.getAttribute("data-theme") || "dark";
 
   const submit = async (event) => {
     event.preventDefault();
@@ -29,7 +31,7 @@ export default function Login() {
     <div className="login-page">
       <header className="login-topbar">
         <div className="login-brand">
-          <img className="login-brand__logo" src="/logo-findoc.png" alt="FinDoc" />
+          <BrandLogo className="login-brand__logo" surface="auth" theme={theme} />
         </div>
         <button type="button" className="login-help">Besoin d'aide ?</button>
       </header>
@@ -96,7 +98,7 @@ export default function Login() {
       </main>
 
       <footer className="login-footer">
-        <img className="login-footer__logo" src="/logo-findoc.png" alt="FinDoc" />
+        <BrandLogo className="login-footer__logo" surface="auth" theme={theme} />
         <nav aria-label="Liens légaux">
           <button type="button">Mentions légales</button>
           <button type="button">Confidentialité</button>
