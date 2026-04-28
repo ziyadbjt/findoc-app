@@ -519,8 +519,15 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     if (!uploadFiles.length) return;
     setUploading(true);
     try {
-      await uploadFactures(token, dossierId, uploadFiles);
-      toast(`${uploadFiles.length} facture(s) traitee(s)`, "pos");
+      const response = await uploadFactures(token, dossierId, uploadFiles);
+      const results = response.data?.resultats || [];
+      const fallbackCount = results.filter((row) => row.source_ai === "fallback").length;
+      toast(
+        fallbackCount
+          ? `${uploadFiles.length} fichier(s) importé(s), ${fallbackCount} à vérifier (Claude non disponible ou lecture faible)`
+          : `${uploadFiles.length} facture(s) extraite(s)`,
+        fallbackCount ? "warn" : "pos"
+      );
       setShowUpload(false);
       setUploadFiles([]);
       onRefresh();
