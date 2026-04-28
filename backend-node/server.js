@@ -355,7 +355,27 @@ async function streamClaudeChat({ message, history, context, res }) {
 
 const tokens = {};
 let nextId = 100;
-const memDossiers = [];
+const DEMO_DOSSIER = {
+  id: 1,
+  raison_sociale: "ATLAS INDUSTRIES SA",
+  ice: "001234567890123",
+  forme_juridique: "SA",
+  ville: "Casablanca",
+  secteur: "Industrie",
+  regime_tva: "debits",
+  if_number: "15243890",
+  rc_number: "98765",
+  cnss_number: "4567891",
+  capital_social: 2500000,
+  adresse: "Zone industrielle Ain Sebaa, Casablanca",
+  telephone: "+212 522 00 00 00",
+  email_societe: "contact@atlas-industries.ma",
+  site_web: "https://atlas-industries.ma",
+  logo_hue: 178,
+  exercice_courant: new Date().getFullYear(),
+  created_at: new Date().toISOString(),
+};
+const memDossiers = [{ ...DEMO_DOSSIER }];
 
 const ROLES = ["admin", "collab", "invite"];
 const USERS = {
