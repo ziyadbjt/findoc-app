@@ -31,7 +31,7 @@ export default function Home() {
 
         <div className="home-topbar__actions">
           <Link to="/dossiers" className="btn btn-primary">
-            Entrer
+            Voir la démo
             <ArrowRight size={15} />
           </Link>
         </div>
@@ -53,7 +53,7 @@ export default function Home() {
 
             <div className="home-cta">
               <Link to="/dossiers" className="btn btn-primary lg">
-                Entrer dans FinDoc
+                Accéder à la plateforme
                 <ArrowRight size={16} />
               </Link>
             </div>
@@ -91,7 +91,7 @@ export default function Home() {
           </div>
           <div className="home-banner__actions">
             <Link to="/dossiers" className="btn btn-primary">
-              Continuer
+              Ouvrir FinDoc
               <ArrowRight size={15} />
             </Link>
             <div className="home-banner__note">
