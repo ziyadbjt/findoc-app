@@ -1,13 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react"
-import axios from "axios"
+import { getMe, loginUser } from "../api"
 
 const AuthContext = createContext()
-const API_HOST =
-  typeof window !== "undefined" && window.location.hostname
-    ? window.location.hostname
-    : "127.0.0.1"
-
-const API_BASE = `http://${API_HOST}:8000`
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -15,9 +9,7 @@ export function AuthProvider({ children }) {
   const [authReady, setAuthReady] = useState(false)
 
   const hydrateSession = async (sessionToken) => {
-    const me = await axios.get(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${sessionToken}` }
-    })
+    const me = await getMe(sessionToken)
     localStorage.setItem("token", sessionToken)
     setToken(sessionToken)
     setUser(me.data)
@@ -25,10 +17,7 @@ export function AuthProvider({ children }) {
   }
 
   const loginWithCredentials = async (email, password) => {
-    const form = new URLSearchParams({ username: email, password })
-    const res = await axios.post(`${API_BASE}/auth/login`, form, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    })
+    const res = await loginUser(email, password)
     return hydrateSession(res.data.access_token)
   }
 
