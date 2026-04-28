@@ -276,6 +276,33 @@
   color: var(--ink-1);
 }
 
+[data-theme="light"] .brand-name,
+[data-theme="light"] .topnav-dossier,
+[data-theme="light"] .topnav-exercise,
+[data-theme="light"] .topnav-item {
+  color: var(--ink-1);
+}
+
+[data-theme="light"] .topnav-item:hover,
+[data-theme="light"] .topnav-item.active,
+[data-theme="light"] .topnav-dossier:hover {
+  color: var(--ink-0);
+}
+
+[data-theme="light"] .topnav-dossier,
+[data-theme="light"] .topnav-exercise {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 55, 42, 0.12);
+}
+
+[data-theme="light"] .topnav-exercise select {
+  color: var(--ink-0);
+}
+
+[data-theme="light"] .topnav-brand {
+  border-right-color: rgba(0, 55, 42, 0.1);
+}
+
 [data-theme="light"] .topnav-search:hover {
   border-color: rgba(0, 55, 42, 0.22);
   color: var(--ink-0);
