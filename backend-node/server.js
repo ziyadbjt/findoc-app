@@ -1009,8 +1009,9 @@ app.get("/factures/:dossier_id/export-dgi", (req, res) => {
 });
 
 app.get("/", (req, res) => res.json({ message: "FinDoc API is running", db: !!PYTHON && fs.existsSync(DB_PATH) }));
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-const PORT = 8000;
+const PORT = process.env.PORT || 8000;
 const HOST = process.env.HOST || "0.0.0.0";
 
 app.listen(PORT, HOST, () => {
