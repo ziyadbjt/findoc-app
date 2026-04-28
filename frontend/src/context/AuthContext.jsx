@@ -2,6 +2,14 @@ import { createContext, useContext, useState, useEffect } from "react"
 import { getMe, loginUser } from "../api"
 
 const AuthContext = createContext()
+const SKIP_LOGIN = import.meta.env.DEV || import.meta.env.VITE_SKIP_LOGIN === "true"
+const DEV_USER = {
+  id: 1,
+  email: "ziyad@cabinetchami.ma",
+  nom: "Ziyad",
+  role: "admin",
+  status: "active",
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -27,11 +35,19 @@ export function AuthProvider({ children }) {
       try {
         if (storedToken) {
           await hydrateSession(storedToken)
+        } else if (SKIP_LOGIN) {
+          const res = await loginUser("ziyad@cabinetchami.ma", "password123")
+          await hydrateSession(res.data.access_token)
         }
       } catch {
-        localStorage.removeItem("token")
-        setToken(null)
-        setUser(null)
+        if (SKIP_LOGIN) {
+          setToken("dev-preview-token")
+          setUser(DEV_USER)
+        } else {
+          localStorage.removeItem("token")
+          setToken(null)
+          setUser(null)
+        }
       } finally {
         setAuthReady(true)
       }
