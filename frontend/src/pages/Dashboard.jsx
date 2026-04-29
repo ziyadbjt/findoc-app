@@ -298,6 +298,8 @@ export default function Dashboard() {
 
       <div className="app-shell-content">
         <Topbar
+          route={route}
+          dossier={dossier}
           onOpenCmd={() => setShowCmd(true)}
           onOpenNotifs={() => setShowNotifs(true)}
           onOpenChat={() => setShowChat(true)}

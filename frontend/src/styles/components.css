@@ -266,19 +266,48 @@
 
 /* ── Top navigation bar (action strip) ───────── */
 .topnav {
-  height: 48px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  gap: 8px;
+  padding: 0 20px;
+  gap: 12px;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(143, 212, 188, 0.10);
+  border-bottom: 1px solid var(--line-1);
   background: var(--bg-0);
   position: sticky;
   top: 0;
   z-index: 10;
   overflow: hidden;
+}
+
+.topnav-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topnav-title__page {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-0);
+  white-space: nowrap;
+}
+
+.topnav-title__dossier {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .topnav-brand {
