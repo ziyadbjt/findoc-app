@@ -139,6 +139,7 @@
 /* Collapsed state */
 .sidebar.collapsed {
   width: 62px;
+  overflow: visible;
 }
 
 .sidebar.collapsed .sidebar-brand {
@@ -186,8 +187,24 @@
   pointer-events: none;
 }
 
-.sidebar.collapsed:hover {
+.sidebar.collapsed::before,
+.sidebar.collapsed::after {
+  width: 62px;
+  right: auto;
+}
+
+.sidebar.collapsed:hover::before,
+.sidebar.collapsed:hover::after {
   width: 228px;
+}
+
+.sidebar.collapsed:hover .sidebar-brand,
+.sidebar.collapsed:hover .sidebar-dossier,
+.sidebar.collapsed:hover .sidebar-nav,
+.sidebar.collapsed:hover .sidebar-footer {
+  width: 228px;
+  position: relative;
+  z-index: 2;
 }
 
 .sidebar.collapsed:hover .sidebar-brand {
@@ -207,10 +224,6 @@
 .sidebar.collapsed:hover .sidebar-brand__mark {
   opacity: 0;
   transform: translateY(-50%) scale(0.84);
-}
-
-.sidebar.collapsed:hover .sidebar-collapse-btn {
-  display: grid;
 }
 
 .sidebar.collapsed:hover .sidebar-dossier {
