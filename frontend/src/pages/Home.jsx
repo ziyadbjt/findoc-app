@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import {
   ArrowRight,
   FileText,
@@ -84,6 +85,18 @@ const proof = [
 ]
 
 export default function Home() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".reveal, .reveal-stagger")
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (e.isIntersecting) { e.target.classList.add("is-visible"); observer.unobserve(e.target) }
+      }),
+      { threshold: 0.1 }
+    )
+    els.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div className="home-page">
       <div className="home-background" aria-hidden="true" />
@@ -178,7 +191,7 @@ export default function Home() {
         </section>
 
         {/* STATS BAR */}
-        <section className="home-stats-bar">
+        <section className="home-stats-bar reveal-stagger">
           {stats.map((s) => (
             <div key={s.label} className="home-stat-bar-item">
               <span className="home-stat-bar-item__value">{s.value}</span>
@@ -189,11 +202,11 @@ export default function Home() {
 
         {/* FEATURES */}
         <section className="home-section" id="features">
-          <div className="home-section__head">
+          <div className="home-section__head reveal">
             <span className="home-pill">Ce que FinDoc fait pour vous</span>
             <h2>Tout ce qu'un cabinet perd du temps à faire manuellement,<br />FinDoc le fait automatiquement.</h2>
           </div>
-          <div className="home-features-grid">
+          <div className="home-features-grid reveal-stagger">
             {features.map((f) => (
               <article key={f.title} className="home-feature-card">
                 <div className="home-feature-card__top">
@@ -209,11 +222,11 @@ export default function Home() {
 
         {/* HOW IT WORKS */}
         <section className="home-section" id="how">
-          <div className="home-section__head">
+          <div className="home-section__head reveal">
             <span className="home-pill">En 3 étapes</span>
             <h2>De la facture brute au bilan propre,<br />sans friction.</h2>
           </div>
-          <div className="home-steps">
+          <div className="home-steps reveal-stagger">
             {steps.map((s, i) => (
               <div key={s.n} className="home-step">
                 <div className="home-step__number">{s.n}</div>
@@ -228,7 +241,7 @@ export default function Home() {
         </section>
 
         {/* FINAL CTA */}
-        <section className="home-banner home-banner--cta">
+        <section className="home-banner home-banner--cta reveal">
           <div className="home-banner__copy">
             <span className="home-pill">Démo disponible maintenant</span>
             <h2>Voyez FinDoc en action.<br />Dossier réel, données réelles.</h2>
