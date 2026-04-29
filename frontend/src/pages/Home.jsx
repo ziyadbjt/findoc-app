@@ -11,7 +11,6 @@ import {
   Star,
 } from "lucide-react"
 import { Link } from "react-router-dom"
-import BrandLogo from "../components/BrandLogo"
 
 const stats = [
   { value: "3×", label: "Plus rapide qu'une saisie manuelle" },
@@ -91,7 +90,11 @@ export default function Home() {
 
       <header className="home-topbar">
         <Link to="/" className="home-brand" aria-label="FinDoc accueil">
-          <BrandLogo className="home-brand__logo" surface="marketing" />
+          <img
+            className="home-brand__logo"
+            src="/logo-findoc-home.png"
+            alt="FinDoc"
+          />
         </Link>
         <nav className="home-nav">
           <a href="#features" className="home-nav__link">Fonctionnalités</a>
