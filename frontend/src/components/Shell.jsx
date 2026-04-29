@@ -61,78 +61,80 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
 
   return (
     <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
-      {/* Brand + toggle */}
-      <div className="sidebar-brand">
-        <div className="sidebar-brand__media" aria-hidden="true">
-          <img src="/logo-findoc-sidebar.png" alt="" className="sidebar-brand__logo" />
-          <img src="/logo-findoc-icon.png" alt="" className="sidebar-brand__mark" />
+      <div className="sidebar-surface">
+        {/* Brand + toggle */}
+        <div className="sidebar-brand">
+          <div className="sidebar-brand__media" aria-hidden="true">
+            <img src="/logo-findoc-sidebar.png" alt="" className="sidebar-brand__logo" />
+            <img src="/logo-findoc-icon.png" alt="" className="sidebar-brand__mark" />
+          </div>
+          <button
+            className="sidebar-collapse-btn"
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Agrandir" : "Réduire"}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
         </div>
-        <button
-          className="sidebar-collapse-btn"
-          onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? "Agrandir" : "Réduire"}
-        >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+
+        {/* Dossier switcher */}
+        <button className="sidebar-dossier" onClick={onSwitchDossier} title={dossier?.raison_sociale || "Sélectionner un dossier"}>
+          <DossierAvatar dossier={dossier} size={26} />
+          <span className="sidebar-dossier__label truncate">
+            {dossier?.raison_sociale || "Sélectionner un dossier"}
+          </span>
+          <ChevronsUpDown className="sidebar-dossier__chevron" size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
         </button>
-      </div>
 
-      {/* Dossier switcher */}
-      <button className="sidebar-dossier" onClick={onSwitchDossier} title={dossier?.raison_sociale || "Sélectionner un dossier"}>
-        <DossierAvatar dossier={dossier} size={26} />
-        <span className="sidebar-dossier__label truncate">
-          {dossier?.raison_sociale || "Sélectionner un dossier"}
-        </span>
-        <ChevronsUpDown className="sidebar-dossier__chevron" size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
-      </button>
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          {primaryNav.map((n) => (
+            <button
+              key={n.key}
+              className={`sidebar-item${route === n.key ? " active" : ""}`}
+              onClick={() => setRoute(n.key)}
+              title={collapsed ? n.label : undefined}
+            >
+              {n.icon}
+              <span className="sidebar-item__label">{n.label}</span>
+              <span className={`sidebar-badge${n.badge > 0 ? "" : " is-hidden"}`}>{n.badge}</span>
+            </button>
+          ))}
 
-      {/* Navigation */}
-      <nav className="sidebar-nav">
-        {primaryNav.map((n) => (
+          <div className="sidebar-divider" />
+
+          {secondaryNav.map((n) => (
+            <button
+              key={n.key}
+              className={`sidebar-item${route === n.key ? " active" : ""}`}
+              onClick={() => setRoute(n.key)}
+              title={collapsed ? n.label : undefined}
+            >
+              {n.icon}
+              <span className="sidebar-item__label">{n.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="sidebar-footer">
           <button
-            key={n.key}
-            className={`sidebar-item${route === n.key ? " active" : ""}`}
-            onClick={() => setRoute(n.key)}
-            title={collapsed ? n.label : undefined}
+            className={`sidebar-footer-btn${collapsed ? " centered" : ""}`}
+            onClick={onToggleTheme}
+            title={theme === "dark" ? "Mode clair" : "Mode sombre"}
           >
-            {n.icon}
-            <span className="sidebar-item__label">{n.label}</span>
-            <span className={`sidebar-badge${n.badge > 0 ? "" : " is-hidden"}`}>{n.badge}</span>
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            <span className="sidebar-footer-btn__label">{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
           </button>
-        ))}
-
-        <div className="sidebar-divider" />
-
-        {secondaryNav.map((n) => (
           <button
-            key={n.key}
-            className={`sidebar-item${route === n.key ? " active" : ""}`}
-            onClick={() => setRoute(n.key)}
-            title={collapsed ? n.label : undefined}
+            className={`sidebar-footer-btn logout${collapsed ? " centered" : ""}`}
+            onClick={onLogout}
+            title="Déconnexion"
           >
-            {n.icon}
-            <span className="sidebar-item__label">{n.label}</span>
+            <LogOut size={15} />
+            <span className="sidebar-footer-btn__label">Déconnexion</span>
           </button>
-        ))}
-      </nav>
-
-      {/* Footer */}
-      <div className="sidebar-footer">
-        <button
-          className={`sidebar-footer-btn${collapsed ? " centered" : ""}`}
-          onClick={onToggleTheme}
-          title={theme === "dark" ? "Mode clair" : "Mode sombre"}
-        >
-          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-          <span className="sidebar-footer-btn__label">{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
-        </button>
-        <button
-          className={`sidebar-footer-btn logout${collapsed ? " centered" : ""}`}
-          onClick={onLogout}
-          title="Déconnexion"
-        >
-          <LogOut size={15} />
-          <span className="sidebar-footer-btn__label">Déconnexion</span>
-        </button>
+        </div>
       </div>
     </aside>
   );
