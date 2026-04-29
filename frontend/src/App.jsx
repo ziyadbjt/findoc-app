@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { ToastProvider } from "./context/ToastContext"
+import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Dossiers from "./pages/Dossiers"
 import Dashboard from "./pages/Dashboard"
@@ -26,18 +27,28 @@ function PrivateRoute({ children }) {
   return children
 }
 
+function AnimatedRoutes() {
+  const location = useLocation()
+  return (
+    <div key={location.pathname} className="page-transition">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
+        <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
+        <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
       <ToastProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
-            <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
-            <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="*" element={<Navigate to="/dossiers" replace />} />
-          </Routes>
+          <AnimatedRoutes />
         </BrowserRouter>
       </ToastProvider>
     </AuthProvider>

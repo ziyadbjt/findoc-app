@@ -451,9 +451,9 @@ export default function Dossiers() {
       {showModal && <NewDossierModal onClose={() => setShowModal(false)} onCreated={load} />}
 
       <header style={{ padding: "16px 40px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", background: "var(--bg-1)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div className="brand-mark">F</div>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Espace dossiers</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/logo-findoc-day-v2-transparent.png" alt="FinDoc" style={{ height: 28, width: "auto" }} />
+          <span style={{ fontWeight: 500, fontSize: 13, color: "var(--ink-2)" }}>Espace dossiers</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{user?.nom || "Ziyad B."}</div>

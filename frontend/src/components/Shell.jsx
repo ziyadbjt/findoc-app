@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Home, FileText, GitMerge, Mail, Building2, Database, Settings,
-  ChevronsUpDown, LogOut, ChevronRight, Search, Bell, Sun, Moon,
+  ChevronsUpDown, LogOut, ChevronLeft, ChevronRight, Search, Bell, Sun, Moon,
   Sparkles, AlertTriangle, Download, X, Plus, Send,
   Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
@@ -39,92 +39,146 @@ export function DossierAvatar({ dossier, size = 28 }) {
   );
 }
 
-export function Sidebar() { return null; }
+export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, onToggleTheme, theme }) {
+  const primaryNav = [
+    { key: "overview",       label: "Aperçu",      icon: <Home size={16} /> },
+    { key: "factures",       label: "Factures",     icon: <FileText size={16} />, badge: counts?.factures },
+    { key: "delai_paiement", label: "Délais",       icon: <GitMerge size={16} />, badge: counts?.relances },
+    { key: "relances",       label: "Relances",     icon: <Mail size={16} /> },
+    { key: "tiers",          label: "Tiers",        icon: <Building2 size={16} /> },
+    { key: "tva",            label: "TVA",          icon: <Receipt size={16} /> },
+    { key: "treso",          label: "Trésorerie",   icon: <TrendingUp size={16} /> },
+  ];
 
-export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs, currentExercise, onChangeExercise }) {
-  const nav = [
-    { key: "overview",       label: "Aperçu",          icon: <Home size={14} /> },
-    { key: "factures",       label: "Factures",         icon: <FileText size={14} />, badge: counts?.factures },
-    { key: "delai_paiement", label: "Délais",           icon: <GitMerge size={14} />, badge: counts?.relances },
-    { key: "relances",       label: "Relances",         icon: <Mail size={14} /> },
-    { key: "tiers",          label: "Tiers",            icon: <Building2 size={14} /> },
-    { key: "tva",            label: "TVA",              icon: <Receipt size={14} /> },
-    { key: "treso",          label: "Trésorerie",       icon: <TrendingUp size={14} /> },
-    { key: "anomalies",      label: "Anomalies",        icon: <AlertTriangle size={14} /> },
-    { key: "audit",          label: "Audit",            icon: <ShieldCheck size={14} /> },
-    { key: "journal",        label: "Extraction",       icon: <Database size={14} /> },
-    { key: "parametres",     label: "Paramètres",       icon: <Settings size={14} /> },
+  const secondaryNav = [
+    { key: "anomalies",  label: "Anomalies",  icon: <AlertTriangle size={16} /> },
+    { key: "audit",      label: "Audit",      icon: <ShieldCheck size={16} /> },
+    { key: "journal",    label: "Extraction", icon: <Database size={16} /> },
+    { key: "parametres", label: "Paramètres", icon: <Settings size={16} /> },
   ];
 
   return (
-    <header className="topnav">
-      {/* Brand */}
-      <div className="topnav-brand">
-        <div className="brand-mark" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>F</div>
-        <span className="brand-name" style={{ fontSize: 15, letterSpacing: "0.12em" }}>Findoc</span>
-      </div>
+    <aside className="sidebar">
+      <div className="sidebar-surface">
+        {/* Brand + toggle */}
+        <div className="sidebar-brand">
+          <div className="sidebar-brand__media" aria-hidden="true">
+            <img src="/logo-findoc-sidebar.png" alt="" className="sidebar-brand__logo" />
+            <img src="/logo-findoc-icon.png" alt="" className="sidebar-brand__mark" />
+          </div>
+        </div>
 
-      {/* Dossier switcher */}
-      <button className="topnav-dossier" onClick={onSwitchDossier}>
-        <DossierAvatar dossier={dossier} size={24} />
-        <span className="truncate" style={{ maxWidth: 160, fontSize: 12, fontWeight: 500 }}>
-          {dossier?.raison_sociale || "Sélectionner un dossier"}
-        </span>
-        <ChevronsUpDown size={13} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
-      </button>
-      <label className="topnav-exercise">
-        <span>Exercice</span>
-        <select value={currentExercise || new Date().getFullYear()} onChange={(event) => onChangeExercise?.(Number(event.target.value))}>
-          {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() + 2 - index).map((year) => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
-      </label>
+        {/* Dossier switcher */}
+        <button className="sidebar-dossier" onClick={onSwitchDossier} title={dossier?.raison_sociale || "Sélectionner un dossier"}>
+          <DossierAvatar dossier={dossier} size={26} />
+          <span className="sidebar-dossier__label truncate">
+            {dossier?.raison_sociale || "Sélectionner un dossier"}
+          </span>
+          <ChevronsUpDown className="sidebar-dossier__chevron" size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
+        </button>
 
-      {/* Nav links */}
-      <nav className="topnav-links">
-        {nav.filter(n => n.key !== "parametres").map((n) => (
-          <button
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          {primaryNav.map((n) => (
+            <button
             key={n.key}
-            className={`topnav-item${route === n.key ? " active" : ""}`}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
             onClick={() => setRoute(n.key)}
-            title={n.label}
           >
             {n.icon}
-            <span className="topnav-item-label">{n.label}</span>
-            {n.badge > 0 && <span className="topnav-badge">{n.badge}</span>}
-          </button>
-        ))}
-        <button
-          className={`topnav-item${route === "parametres" ? " active" : ""}`}
-          onClick={() => setRoute("parametres")}
-          title="Paramètres"
-          style={{ marginLeft: "auto" }}
-        >
-          <Settings size={14} />
-          <span className="topnav-item-label">Paramètres</span>
-        </button>
-      </nav>
+            <span className="sidebar-item__label">{n.label}</span>
+              <span className={`sidebar-badge${n.badge > 0 ? "" : " is-hidden"}`}>{n.badge}</span>
+            </button>
+          ))}
 
-      {/* Right actions */}
-      <div className="topnav-actions">
-        <button className="topnav-search" onClick={onOpenCmd}>
-          <Search size={13} />
-          <span>Rechercher</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-        <button className="icon-btn" onClick={onToggleTheme} title="Thème">
-          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
-        <button className="icon-btn" onClick={onOpenChat} title="Assistant">
-          <MessageSquare size={14} />
-        </button>
-        <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
-          <Bell size={14} />
-        </button>
-        <button className="icon-btn" onClick={onLogout} title="Déconnexion">
-          <LogOut size={14} />
-        </button>
+          <div className="sidebar-divider" />
+
+          {secondaryNav.map((n) => (
+            <button
+            key={n.key}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
+            <span className="sidebar-item__label">{n.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-footer-btn"
+            onClick={onToggleTheme}
+            title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+          >
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            <span className="sidebar-footer-btn__label">{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
+          </button>
+          <button
+            className="sidebar-footer-btn logout"
+            onClick={onLogout}
+            title="Déconnexion"
+          >
+            <LogOut size={15} />
+            <span className="sidebar-footer-btn__label">Déconnexion</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+const ROUTE_LABELS = {
+  overview:       "Aperçu",
+  factures:       "Factures",
+  delai_paiement: "Délais de paiement",
+  relances:       "Relances",
+  tiers:          "Tiers",
+  tva:            "Déclaration TVA",
+  treso:          "Trésorerie",
+  anomalies:      "Anomalies",
+  audit:          "Audit",
+  journal:        "Extraction",
+  parametres:     "Paramètres",
+  reconciliation: "Rapprochement",
+  rapport_mensuel:"Rapport mensuel",
+};
+
+export function Topbar({ route, dossier, onOpenCmd, onOpenNotifs, onOpenChat, hasNotifs, currentExercise, onChangeExercise }) {
+  return (
+    <header className="topnav">
+      {/* Page title — left */}
+      <div className="topnav-title">
+        <span className="topnav-title__page">{ROUTE_LABELS[route] || "Tableau de bord"}</span>
+        {dossier?.raison_sociale && (
+          <span className="topnav-title__dossier">{dossier.raison_sociale}</span>
+        )}
+      </div>
+
+      {/* Right group: exercice + actions */}
+      <div className="topnav-right">
+        <label className="topnav-exercise">
+          <span>Exercice</span>
+          <select value={currentExercise || new Date().getFullYear()} onChange={(e) => onChangeExercise?.(Number(e.target.value))}>
+            {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() + 2 - i).map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="topnav-actions">
+          <button className="topnav-search" onClick={onOpenCmd} title="Rechercher (Ctrl K)">
+            <Search size={13} />
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button className="icon-btn" onClick={onOpenChat} title="Assistant IA">
+            <MessageSquare size={14} />
+          </button>
+          <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
+            <Bell size={14} />
+          </button>
+        </div>
       </div>
     </header>
   );

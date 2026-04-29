@@ -536,8 +536,10 @@ const DEMO_DOSSIER = {
 const memDossiers = [{ ...DEMO_DOSSIER }];
 const memFactures = [];
 const memEcritures = [];
+const memFiles = new Map();
 let nextFactureId = 1;
 let nextEcritureId = 1;
+let nextFileId = 1;
 
 const ROLES = ["admin", "collab", "invite"];
 const USERS = {
@@ -838,11 +840,17 @@ app.post("/factures/:dossier_id/upload", upload.array("files"), async (req, res)
       extracted = null;
     }
     extracted = extracted || fallbackExtractInvoice(file);
+    const storedKey = `mem_${Date.now()}_${nextFileId++}_${path.basename(file.originalname || "facture")}`;
+    memFiles.set(storedKey, {
+      buffer: file.buffer,
+      mimetype: file.mimetype || (ext === ".pdf" ? "application/pdf" : "application/octet-stream"),
+      filename: file.originalname || `facture-${Date.now()}${ext}`,
+    });
 
     const baseFacture = {
       dossier_id: Number(req.params.dossier_id),
       nom_fichier: file.originalname || `facture-${Date.now()}${ext}`,
-      stored_filename: null,
+      stored_filename: storedKey,
       fournisseur: extracted.fournisseur || "Fournisseur a verifier",
       code_tiers: extracted.code_tiers || "FLAVERI",
       montant_ht: Number(extracted.montant_ht || 0),
@@ -923,6 +931,34 @@ app.post("/factures/:dossier_id/upload", upload.array("files"), async (req, res)
 
   logAction(email, "upload_facture", "dossier", req.params.dossier_id, `${resultats.length} fichier(s) importe(s)`, req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
   res.json({ total: files.length, resultats });
+});
+
+app.get("/factures/item/:facture_id/file", (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const rows = sqlQuery("SELECT id, nom_fichier, stored_filename FROM factures WHERE id = ?", [req.params.facture_id]);
+  const facture = (rows && rows[0]) || memFactures.find((row) => Number(row.id) === Number(req.params.facture_id));
+  if (!facture) return res.status(404).json({ detail: "Facture introuvable" });
+
+  if (facture.stored_filename && memFiles.has(facture.stored_filename)) {
+    const file = memFiles.get(facture.stored_filename);
+    res.setHeader("Content-Type", file.mimetype);
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(file.filename)}"`);
+    return res.send(file.buffer);
+  }
+
+  if (facture.stored_filename) {
+    const safeName = path.basename(facture.stored_filename);
+    const candidates = [
+      path.join(__dirname, "..", "backend", "uploads", safeName),
+      path.join(__dirname, "uploads", safeName),
+    ];
+    const found = candidates.find((candidate) => fs.existsSync(candidate));
+    if (found) return res.sendFile(found);
+  }
+
+  return res.status(404).json({ detail: "Fichier original introuvable" });
 });
 
 app.post("/dossiers/extract-societe", upload.single("file"), (req, res) => {
