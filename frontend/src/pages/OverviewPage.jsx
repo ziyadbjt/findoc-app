@@ -5,11 +5,11 @@ import {
 import { formatMAD, formatDate } from "../utils/format";
 
 const DASHBOARD_WIDGETS = [
-  { key: "hero", label: "Vue executive", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
-  { key: "finance", label: "Tendance & balance agee", desc: "Flux d'achats et exposition fournisseurs." },
-  { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice precedent." },
+  { key: "hero", label: "Vue d'ensemble", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
+  { key: "finance", label: "Tendance & balance âgée", desc: "Flux d'achats et exposition fournisseurs." },
+  { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice précédent." },
   { key: "suppliers", label: "Top fournisseurs", desc: "Concentration des achats par tiers." },
-  { key: "activity", label: "Activite du dossier", desc: "Actions recentes et signaux de suivi." },
+  { key: "activity", label: "Activité du dossier", desc: "Actions récentes et signaux de suivi." },
 ];
 
 function getDashboardPrefsKey(user, dossier) {
@@ -170,11 +170,11 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
   const trendCash = [420, 445, 460, 510, 495, 540, 580, 620, 610, 695, 780, 847];
 
   const activity = [
-    { icon: "sparkles", color: "accent", title: "Extraction automatique terminee", sub: "98% de confiance moyenne sur les derniers lots", time: "Il y a 2 min" },
-    { icon: "check", color: "pos", title: "Rapprochement bancaire valide", sub: "5 lignes confirmee cote banque et achats", time: "Il y a 1 h" },
-    { icon: "alert", color: "warn", title: "Retards a traiter", sub: `${overdue.length || 0} facture${overdue.length > 1 ? "s" : ""} doivent etre relancees`, time: "Ce matin" },
-    { icon: "mail", color: "info", title: "Relance niveau 2 preparee", sub: "Le brouillon email est pret pour validation", time: "Hier" },
-    { icon: "upload", color: "", title: "Export SAGE pret", sub: "Le journal des ecritures est disponible en export", time: "Hier" },
+    { icon: "sparkles", color: "accent", title: "Extraction automatique terminée", sub: "98% de confiance moyenne sur les derniers lots", time: "Il y a 2 min" },
+    { icon: "check", color: "pos", title: "Rapprochement bancaire validé", sub: "5 lignes confirmées côté banque et achats", time: "Il y a 1 h" },
+    { icon: "alert", color: "warn", title: "Retards à traiter", sub: `${overdue.length || 0} facture${overdue.length > 1 ? "s" : ""} à relancer`, time: "Ce matin" },
+    { icon: "mail", color: "info", title: "Relance niveau 2 préparée", sub: "Le brouillon email est prêt pour validation", time: "Hier" },
+    { icon: "upload", color: "", title: "Export SAGE prêt", sub: "Le journal des écritures est disponible en export", time: "Hier" },
   ];
 
   // Alertes intelligentes calculées dynamiquement
@@ -288,7 +288,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-          Choisis les blocs visibles dans ton aperçu.
+          Personnalisez les blocs visibles dans votre aperçu.
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {onNavigate && (
@@ -315,13 +315,12 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.9fr)", gap: 20, alignItems: "stretch" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div>
-              <div className="badge accent" style={{ marginBottom: 14 }}>Vue cabinet</div>
+              <div className="badge accent" style={{ marginBottom: 14 }}>Vue d'ensemble</div>
               <h1 className="page-title" style={{ marginBottom: 10 }}>
-                Une lecture plus executive du dossier {dossier?.raison_sociale || "client"}.
+                {dossier?.raison_sociale || "Tableau de bord"}
               </h1>
               <p className="page-subtitle" style={{ maxWidth: 720, fontSize: 15, lineHeight: 1.7 }}>
-                L'interface met maintenant en avant les signaux de gestion avant les widgets.
-                On voit d'abord la situation du dossier, puis les actions a prendre.
+                Santé financière du dossier, alertes actives et actions prioritaires en un coup d'œil.
               </p>
             </div>
 
@@ -330,19 +329,19 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
                 label="Achats suivis"
                 value={formatMAD(totalAchats).split(",")[0]}
                 unit="MAD"
-                hint={`${processed.length} factures comptabilisees`}
+                hint={`${processed.length} factures comptabilisées`}
               />
               <MetricCard
-                label="TVA recuperable"
+                label="TVA récupérable"
                 value={formatMAD(totalTva).split(",")[0]}
                 unit="MAD"
-                hint="Ventilation prete pour declaration"
+                hint="Ventilation prête pour déclaration"
               />
               <MetricCard
                 label="Retards ouverts"
                 value={String(overdue.length)}
                 unit="dossiers"
-                hint={`${formatMAD(overdueTotal).split(",")[0]} MAD exposes`}
+                hint={`${formatMAD(overdueTotal).split(",")[0]} MAD exposés`}
                 tone="warn"
               />
             </div>
@@ -363,11 +362,11 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
             <div style={{ display: "grid", gap: 18 }}>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                  <span className="card-title" style={{ fontSize: 28 }}>Tresorerie pilotee</span>
+                  <span className="card-title" style={{ fontSize: 28 }}>Trésorerie pilotée</span>
                   <span className="badge pos">+3.1%</span>
                 </div>
                 <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
-                  Solde BMCE estime au fil des mouvements rapproches.
+                  Solde BMCE estimé au fil des mouvements rapprochés.
                 </div>
                 <div className="kpi-value">
                   <span className="tabular">847 230</span>
@@ -398,7 +397,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
               <div className="kpi-label">Tendance achats</div>
               <div className="card-title">Flux d'achats sur 12 mois</div>
               <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
-                Une presentation plus calme et plus lisible que la grille KPI classique.
+                Évolution mensuelle du volume d'achats sur 12 mois glissants.
               </div>
             </div>
             <button className="btn btn-ghost sm">
@@ -421,18 +420,18 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
-              <DataPoint label="Ecritures traitees" value={String(processed.length)} />
+              <DataPoint label="Écritures traitées" value={String(processed.length)} />
               <DataPoint label="Montant moyen" value={formatMAD(processed.length ? totalAchats / processed.length : 0).split(",")[0]} mono />
-              <DataPoint label="Derniere mise a jour" value={formatDate(new Date().toISOString())} />
+              <DataPoint label="Dernière mise à jour" value={formatDate(new Date().toISOString())} />
             </div>
           </div>
         </div>
 
         <div className="card" style={{ padding: 24 }}>
           <div className="kpi-label">Exposition fournisseurs</div>
-          <div className="card-title" style={{ marginBottom: 6 }}>Balance agee</div>
+          <div className="card-title" style={{ marginBottom: 6 }}>Balance âgée</div>
           <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 18 }}>
-            Les montants a surveiller remontent avant la table detaillee.
+            Répartition des factures impayées par tranche d'ancienneté.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {Object.entries(aging).map(([bucket, amount]) => {
@@ -474,7 +473,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
           <div style={{ display: "grid", gap: 12 }}>
             {topFournisseurs.length === 0 && (
               <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "20px 0", textAlign: "center" }}>
-                Aucune donnee fournisseur pour le moment.
+                Aucune donnée fournisseur pour le moment.
               </div>
             )}
             {topFournisseurs.map(([name, amt], i) => (
@@ -502,8 +501,8 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
           <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
             <div>
-              <div className="kpi-label">Actions recentes</div>
-              <div className="card-title">Activite du dossier</div>
+              <div className="kpi-label">Actions récentes</div>
+              <div className="card-title">Activité du dossier</div>
             </div>
           </div>
 
