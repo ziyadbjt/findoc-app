@@ -52,6 +52,23 @@
   --shadow-lg: 0 32px 80px rgba(0, 0, 0, 0.6);
   --shadow-pop: 0 44px 120px rgba(0, 0, 0, 0.72);
 
+  /* Liquid glass */
+  --glass-blur: 22px;
+  --glass-saturate: 1.25;
+  --glass-bg-soft:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), transparent 38%),
+    linear-gradient(135deg, rgba(0, 52, 42, 0.72), rgba(0, 33, 27, 0.62));
+  --glass-bg-strong:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.075), transparent 28%),
+    linear-gradient(90deg, rgba(0, 52, 44, 0.82), rgba(0, 33, 27, 0.76));
+  --glass-bg-subtle: rgba(143, 212, 188, 0.075);
+  --glass-border: rgba(143, 212, 188, 0.16);
+  --glass-border-strong: rgba(143, 212, 188, 0.22);
+  --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 34%, rgba(143, 212, 188, 0.04));
+  --glass-shadow: 0 18px 54px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --glass-shadow-strong: 0 10px 34px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-shadow-pop: 0 28px 80px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   /* Radii */
   --r-xs: 4px;
   --r-sm: 6px;
@@ -150,6 +167,19 @@
   --shadow-md: 0 20px 56px rgba(0, 55, 42, 0.13);
   --shadow-lg: 0 32px 80px rgba(0, 55, 42, 0.18);
   --shadow-pop: 0 44px 120px rgba(0, 55, 42, 0.22);
+  --glass-bg-soft:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(235, 246, 241, 0.55)),
+    rgba(255, 255, 255, 0.58);
+  --glass-bg-strong:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(235, 246, 241, 0.62)),
+    rgba(255, 255, 255, 0.64);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(0, 55, 42, 0.12);
+  --glass-border-strong: rgba(0, 55, 42, 0.18);
+  --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 34%, rgba(0, 55, 42, 0.03));
+  --glass-shadow: 0 18px 42px rgba(0, 55, 42, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --glass-shadow-strong: 0 12px 34px rgba(0, 55, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --glass-shadow-pop: 0 28px 80px rgba(0, 55, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 * { box-sizing: border-box; }
