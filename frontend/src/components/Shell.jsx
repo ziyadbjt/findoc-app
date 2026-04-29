@@ -167,10 +167,9 @@ export function Topbar({ onOpenCmd, onOpenNotifs, onOpenChat, hasNotifs, current
         </select>
       </label>
 
-      <div className="topnav-actions" style={{ marginLeft: "auto" }}>
-        <button className="topnav-search" onClick={onOpenCmd}>
+      <div className="topnav-actions">
+        <button className="topnav-search" onClick={onOpenCmd} title="Rechercher (Ctrl K)">
           <Search size={13} />
-          <span>Rechercher</span>
           <kbd>Ctrl K</kbd>
         </button>
         <button className="icon-btn" onClick={onOpenChat} title="Assistant IA">
