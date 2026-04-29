@@ -462,6 +462,26 @@
   transition: max-width 180ms ease, opacity 120ms ease;
 }
 
+[data-theme="light"] .sidebar-item,
+[data-theme="light"] .sidebar-dossier,
+[data-theme="light"] .sidebar-footer-btn {
+  color: var(--ink-1);
+}
+
+[data-theme="light"] .sidebar-item:hover,
+[data-theme="light"] .sidebar-dossier:hover,
+[data-theme="light"] .sidebar-footer-btn:hover {
+  color: var(--ink-0);
+}
+
+[data-theme="light"] .sidebar-item.active {
+  color: #0f5a49;
+}
+
+[data-theme="light"] .sidebar-footer-btn.logout:hover {
+  color: #8d3026;
+}
+
 /* legacy — keep for any page still using it */
 .app-topnav {
   display: flex;
