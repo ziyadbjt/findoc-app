@@ -64,10 +64,10 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
       {/* Brand + toggle */}
       <div className="sidebar-brand">
         {!collapsed && (
-          <img src="/logo-findoc-day-v2-transparent.png" alt="FinDoc" className="sidebar-brand__logo" />
+          <img src="/logo-findoc-sidebar.png" alt="FinDoc" className="sidebar-brand__logo" />
         )}
         {collapsed && (
-          <img src="/logo-findoc-mark.png" alt="F" className="sidebar-brand__mark" />
+          <img src="/logo-findoc-icon.png" alt="FinDoc" className="sidebar-brand__mark" />
         )}
         <button
           className="sidebar-collapse-btn"
