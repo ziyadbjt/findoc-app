@@ -92,7 +92,7 @@ export default function Home() {
         <Link to="/" className="home-brand" aria-label="FinDoc accueil">
           <img
             className="home-brand__logo"
-            src="/logo-findoc-home.png"
+            src="/logo-findoc-day-v2-transparent.png"
             alt="FinDoc"
           />
         </Link>
