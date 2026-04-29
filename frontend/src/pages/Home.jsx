@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   ArrowRight,
   FileText,
@@ -10,6 +10,8 @@ import {
   Clock,
   CheckCircle2,
   Star,
+  Menu,
+  X,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
@@ -85,6 +87,8 @@ const proof = [
 ]
 
 export default function Home() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   useEffect(() => {
     const els = document.querySelectorAll(".reveal, .reveal-stagger")
     const observer = new IntersectionObserver(
@@ -97,24 +101,60 @@ export default function Home() {
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 860) setMenuOpen(false)
+    }
+
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
   return (
     <div className="home-page">
       <div className="home-background" aria-hidden="true" />
 
-      <header className="home-topbar">
-        <Link to="/" className="home-brand" aria-label="FinDoc accueil">
-          <img
-            className="home-brand__logo"
-            src="/logo-findoc-day-v2-transparent.png"
-            alt="FinDoc"
-          />
-        </Link>
-        <nav className="home-nav">
-          <a href="#features" className="home-nav__link">Fonctionnalités</a>
-          <a href="#how" className="home-nav__link">Comment ça marche</a>
-        </nav>
-        <div className="home-topbar__actions">
-          <Link to="/dossiers" className="btn btn-primary">
+      <header className={`home-topbar${menuOpen ? " is-open" : ""}`}>
+        <div className="home-topbar__bar">
+          <Link to="/" className="home-brand" aria-label="FinDoc accueil">
+            <img
+              className="home-brand__logo"
+              src="/logo-findoc-day-v2-transparent.png"
+              alt="FinDoc"
+            />
+          </Link>
+
+          <nav className="home-nav" aria-label="Navigation accueil">
+            <a href="#features" className="home-nav__link">Fonctionnalités</a>
+            <a href="#how" className="home-nav__link">Comment ça marche</a>
+          </nav>
+
+          <div className="home-topbar__actions">
+            <Link to="/dossiers" className="btn btn-primary">
+              Voir la démo
+              <ArrowRight size={15} />
+            </Link>
+          </div>
+
+          <button
+            type="button"
+            className="home-menu-toggle"
+            aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
+
+        <div className={`home-mobile-menu${menuOpen ? " is-open" : ""}`}>
+          <a href="#features" className="home-mobile-menu__link" onClick={() => setMenuOpen(false)}>
+            Fonctionnalités
+          </a>
+          <a href="#how" className="home-mobile-menu__link" onClick={() => setMenuOpen(false)}>
+            Comment ça marche
+          </a>
+          <Link to="/dossiers" className="btn btn-primary home-mobile-menu__cta" onClick={() => setMenuOpen(false)}>
             Voir la démo
             <ArrowRight size={15} />
           </Link>
