@@ -40,8 +40,6 @@ export function DossierAvatar({ dossier, size = 28 }) {
 }
 
 export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, onToggleTheme, theme }) {
-  const [collapsed, setCollapsed] = useState(false);
-
   const primaryNav = [
     { key: "overview",       label: "Aperçu",      icon: <Home size={16} /> },
     { key: "factures",       label: "Factures",     icon: <FileText size={16} />, badge: counts?.factures },
@@ -60,7 +58,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
   ];
 
   return (
-    <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
+    <aside className="sidebar">
       <div className="sidebar-surface">
         {/* Brand + toggle */}
         <div className="sidebar-brand">
@@ -68,13 +66,6 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             <img src="/logo-findoc-sidebar.png" alt="" className="sidebar-brand__logo" />
             <img src="/logo-findoc-icon.png" alt="" className="sidebar-brand__mark" />
           </div>
-          <button
-            className="sidebar-collapse-btn"
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Agrandir" : "Réduire"}
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
         </div>
 
         {/* Dossier switcher */}
@@ -90,13 +81,12 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
         <nav className="sidebar-nav">
           {primaryNav.map((n) => (
             <button
-              key={n.key}
-              className={`sidebar-item${route === n.key ? " active" : ""}`}
-              onClick={() => setRoute(n.key)}
-              title={collapsed ? n.label : undefined}
-            >
-              {n.icon}
-              <span className="sidebar-item__label">{n.label}</span>
+            key={n.key}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
+            <span className="sidebar-item__label">{n.label}</span>
               <span className={`sidebar-badge${n.badge > 0 ? "" : " is-hidden"}`}>{n.badge}</span>
             </button>
           ))}
@@ -105,13 +95,12 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
 
           {secondaryNav.map((n) => (
             <button
-              key={n.key}
-              className={`sidebar-item${route === n.key ? " active" : ""}`}
-              onClick={() => setRoute(n.key)}
-              title={collapsed ? n.label : undefined}
-            >
-              {n.icon}
-              <span className="sidebar-item__label">{n.label}</span>
+            key={n.key}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
+            <span className="sidebar-item__label">{n.label}</span>
             </button>
           ))}
         </nav>
@@ -119,7 +108,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
         {/* Footer */}
         <div className="sidebar-footer">
           <button
-            className={`sidebar-footer-btn${collapsed ? " centered" : ""}`}
+            className="sidebar-footer-btn"
             onClick={onToggleTheme}
             title={theme === "dark" ? "Mode clair" : "Mode sombre"}
           >
@@ -127,7 +116,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             <span className="sidebar-footer-btn__label">{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
           </button>
           <button
-            className={`sidebar-footer-btn logout${collapsed ? " centered" : ""}`}
+            className="sidebar-footer-btn logout"
             onClick={onLogout}
             title="Déconnexion"
           >
