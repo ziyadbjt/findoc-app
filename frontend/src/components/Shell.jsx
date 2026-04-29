@@ -63,12 +63,10 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
     <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
       {/* Brand + toggle */}
       <div className="sidebar-brand">
-        {!collapsed && (
-          <img src="/logo-findoc-sidebar.png" alt="FinDoc" className="sidebar-brand__logo" />
-        )}
-        {collapsed && (
-          <img src="/logo-findoc-icon.png" alt="FinDoc" className="sidebar-brand__mark" />
-        )}
+        <div className="sidebar-brand__media" aria-hidden="true">
+          <img src="/logo-findoc-sidebar.png" alt="" className="sidebar-brand__logo" />
+          <img src="/logo-findoc-icon.png" alt="" className="sidebar-brand__mark" />
+        </div>
         <button
           className="sidebar-collapse-btn"
           onClick={() => setCollapsed((c) => !c)}
@@ -81,14 +79,10 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
       {/* Dossier switcher */}
       <button className="sidebar-dossier" onClick={onSwitchDossier} title={dossier?.raison_sociale || "Sélectionner un dossier"}>
         <DossierAvatar dossier={dossier} size={26} />
-        {!collapsed && (
-          <>
-            <span className="truncate" style={{ flex: 1, textAlign: "left", fontSize: 12, fontWeight: 500 }}>
-              {dossier?.raison_sociale || "Sélectionner un dossier"}
-            </span>
-            <ChevronsUpDown size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
-          </>
-        )}
+        <span className="sidebar-dossier__label truncate">
+          {dossier?.raison_sociale || "Sélectionner un dossier"}
+        </span>
+        <ChevronsUpDown className="sidebar-dossier__chevron" size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
       </button>
 
       {/* Navigation */}
@@ -101,8 +95,8 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             title={collapsed ? n.label : undefined}
           >
             {n.icon}
-            {!collapsed && <span>{n.label}</span>}
-            {!collapsed && n.badge > 0 && <span className="sidebar-badge">{n.badge}</span>}
+            <span className="sidebar-item__label">{n.label}</span>
+            <span className={`sidebar-badge${n.badge > 0 ? "" : " is-hidden"}`}>{n.badge}</span>
           </button>
         ))}
 
@@ -116,7 +110,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             title={collapsed ? n.label : undefined}
           >
             {n.icon}
-            {!collapsed && <span>{n.label}</span>}
+            <span className="sidebar-item__label">{n.label}</span>
           </button>
         ))}
       </nav>
@@ -129,27 +123,16 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
           title={theme === "dark" ? "Mode clair" : "Mode sombre"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-          {!collapsed && <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>}
+          <span className="sidebar-footer-btn__label">{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
         </button>
-        {!collapsed && (
-          <button
-            className="sidebar-footer-btn logout"
-            onClick={onLogout}
-            title="Déconnexion"
-          >
-            <LogOut size={15} />
-            <span>Déconnexion</span>
-          </button>
-        )}
-        {collapsed && (
-          <button
-            className="sidebar-footer-btn centered"
-            onClick={onLogout}
-            title="Déconnexion"
-          >
-            <LogOut size={15} />
-          </button>
-        )}
+        <button
+          className={`sidebar-footer-btn logout${collapsed ? " centered" : ""}`}
+          onClick={onLogout}
+          title="Déconnexion"
+        >
+          <LogOut size={15} />
+          <span className="sidebar-footer-btn__label">Déconnexion</span>
+        </button>
       </div>
     </aside>
   );
