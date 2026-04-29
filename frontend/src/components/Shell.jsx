@@ -140,29 +140,56 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
   );
 }
 
-export function Topbar({ onOpenCmd, onOpenNotifs, onOpenChat, hasNotifs, currentExercise, onChangeExercise }) {
+const ROUTE_LABELS = {
+  overview:       "Aperçu",
+  factures:       "Factures",
+  delai_paiement: "Délais de paiement",
+  relances:       "Relances",
+  tiers:          "Tiers",
+  tva:            "Déclaration TVA",
+  treso:          "Trésorerie",
+  anomalies:      "Anomalies",
+  audit:          "Audit",
+  journal:        "Extraction",
+  parametres:     "Paramètres",
+  reconciliation: "Rapprochement",
+  rapport_mensuel:"Rapport mensuel",
+};
+
+export function Topbar({ route, dossier, onOpenCmd, onOpenNotifs, onOpenChat, hasNotifs, currentExercise, onChangeExercise }) {
   return (
     <header className="topnav">
-      <label className="topnav-exercise">
-        <span>Exercice</span>
-        <select value={currentExercise || new Date().getFullYear()} onChange={(e) => onChangeExercise?.(Number(e.target.value))}>
-          {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() + 2 - i).map((year) => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
-      </label>
+      {/* Page title — left */}
+      <div className="topnav-title">
+        <span className="topnav-title__page">{ROUTE_LABELS[route] || "Tableau de bord"}</span>
+        {dossier?.raison_sociale && (
+          <span className="topnav-title__dossier">{dossier.raison_sociale}</span>
+        )}
+      </div>
 
-      <div className="topnav-actions">
-        <button className="topnav-search" onClick={onOpenCmd} title="Rechercher (Ctrl K)">
-          <Search size={13} />
-          <kbd>Ctrl K</kbd>
-        </button>
-        <button className="icon-btn" onClick={onOpenChat} title="Assistant IA">
-          <MessageSquare size={14} />
-        </button>
-        <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
-          <Bell size={14} />
-        </button>
+      {/* Right group: exercice + actions */}
+      <div className="topnav-right">
+        <label className="topnav-exercise">
+          <span>Exercice</span>
+          <select value={currentExercise || new Date().getFullYear()} onChange={(e) => onChangeExercise?.(Number(e.target.value))}>
+            {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() + 2 - i).map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="topnav-actions">
+          <button className="topnav-search" onClick={onOpenCmd} title="Rechercher (Ctrl K)">
+            <Search size={13} />
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button className="icon-btn" onClick={onOpenChat} title="Assistant IA">
+            <MessageSquare size={14} />
+          </button>
+          <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
+            <Bell size={14} />
+          </button>
+        </div>
       </div>
     </header>
   );
