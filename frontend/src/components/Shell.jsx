@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Home, FileText, GitMerge, Mail, Building2, Database, Settings,
-  ChevronsUpDown, LogOut, ChevronRight, Search, Bell, Sun, Moon,
+  ChevronsUpDown, LogOut, ChevronLeft, ChevronRight, Search, Bell, Sun, Moon,
   Sparkles, AlertTriangle, Download, X, Plus, Send,
   Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
-import BrandLogo from "./BrandLogo";
 
 export function DossierAvatar({ dossier, size = 28 }) {
   const hue = dossier?.hue ?? 28;
@@ -41,37 +40,55 @@ export function DossierAvatar({ dossier, size = 28 }) {
 }
 
 export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, onToggleTheme, theme }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   const primaryNav = [
-    { key: "overview",       label: "Aperçu",      icon: <Home size={15} /> },
-    { key: "factures",       label: "Factures",     icon: <FileText size={15} />, badge: counts?.factures },
-    { key: "delai_paiement", label: "Délais",       icon: <GitMerge size={15} />, badge: counts?.relances },
-    { key: "relances",       label: "Relances",     icon: <Mail size={15} /> },
-    { key: "tiers",          label: "Tiers",        icon: <Building2 size={15} /> },
-    { key: "tva",            label: "TVA",          icon: <Receipt size={15} /> },
-    { key: "treso",          label: "Trésorerie",   icon: <TrendingUp size={15} /> },
+    { key: "overview",       label: "Aperçu",      icon: <Home size={16} /> },
+    { key: "factures",       label: "Factures",     icon: <FileText size={16} />, badge: counts?.factures },
+    { key: "delai_paiement", label: "Délais",       icon: <GitMerge size={16} />, badge: counts?.relances },
+    { key: "relances",       label: "Relances",     icon: <Mail size={16} /> },
+    { key: "tiers",          label: "Tiers",        icon: <Building2 size={16} /> },
+    { key: "tva",            label: "TVA",          icon: <Receipt size={16} /> },
+    { key: "treso",          label: "Trésorerie",   icon: <TrendingUp size={16} /> },
   ];
 
   const secondaryNav = [
-    { key: "anomalies",  label: "Anomalies",  icon: <AlertTriangle size={15} /> },
-    { key: "audit",      label: "Audit",      icon: <ShieldCheck size={15} /> },
-    { key: "journal",    label: "Extraction", icon: <Database size={15} /> },
-    { key: "parametres", label: "Paramètres", icon: <Settings size={15} /> },
+    { key: "anomalies",  label: "Anomalies",  icon: <AlertTriangle size={16} /> },
+    { key: "audit",      label: "Audit",      icon: <ShieldCheck size={16} /> },
+    { key: "journal",    label: "Extraction", icon: <Database size={16} /> },
+    { key: "parametres", label: "Paramètres", icon: <Settings size={16} /> },
   ];
 
   return (
-    <aside className="sidebar">
-      {/* Brand */}
+    <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
+      {/* Brand + toggle */}
       <div className="sidebar-brand">
-        <BrandLogo className="sidebar-brand__logo" surface="app" theme={theme} />
+        {!collapsed && (
+          <img src="/logo-findoc-day-v2-transparent.png" alt="FinDoc" className="sidebar-brand__logo" />
+        )}
+        {collapsed && (
+          <img src="/logo-findoc-mark.png" alt="F" className="sidebar-brand__mark" />
+        )}
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? "Agrandir" : "Réduire"}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </div>
 
       {/* Dossier switcher */}
-      <button className="sidebar-dossier" onClick={onSwitchDossier}>
+      <button className="sidebar-dossier" onClick={onSwitchDossier} title={dossier?.raison_sociale || "Sélectionner un dossier"}>
         <DossierAvatar dossier={dossier} size={26} />
-        <span className="truncate" style={{ flex: 1, textAlign: "left", fontSize: 12, fontWeight: 500 }}>
-          {dossier?.raison_sociale || "Sélectionner un dossier"}
-        </span>
-        <ChevronsUpDown size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
+        {!collapsed && (
+          <>
+            <span className="truncate" style={{ flex: 1, textAlign: "left", fontSize: 12, fontWeight: 500 }}>
+              {dossier?.raison_sociale || "Sélectionner un dossier"}
+            </span>
+            <ChevronsUpDown size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
+          </>
+        )}
       </button>
 
       {/* Navigation */}
@@ -81,10 +98,11 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             key={n.key}
             className={`sidebar-item${route === n.key ? " active" : ""}`}
             onClick={() => setRoute(n.key)}
+            title={collapsed ? n.label : undefined}
           >
             {n.icon}
-            <span>{n.label}</span>
-            {n.badge > 0 && <span className="sidebar-badge">{n.badge}</span>}
+            {!collapsed && <span>{n.label}</span>}
+            {!collapsed && n.badge > 0 && <span className="sidebar-badge">{n.badge}</span>}
           </button>
         ))}
 
@@ -95,21 +113,43 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
             key={n.key}
             className={`sidebar-item${route === n.key ? " active" : ""}`}
             onClick={() => setRoute(n.key)}
+            title={collapsed ? n.label : undefined}
           >
             {n.icon}
-            <span>{n.label}</span>
+            {!collapsed && <span>{n.label}</span>}
           </button>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="sidebar-footer">
-        <button className="icon-btn" onClick={onToggleTheme} title="Thème">
-          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+        <button
+          className={`sidebar-footer-btn${collapsed ? " centered" : ""}`}
+          onClick={onToggleTheme}
+          title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+        >
+          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+          {!collapsed && <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>}
         </button>
-        <button className="icon-btn" onClick={onLogout} title="Déconnexion" style={{ marginLeft: "auto" }}>
-          <LogOut size={14} />
-        </button>
+        {!collapsed && (
+          <button
+            className="sidebar-footer-btn logout"
+            onClick={onLogout}
+            title="Déconnexion"
+          >
+            <LogOut size={15} />
+            <span>Déconnexion</span>
+          </button>
+        )}
+        {collapsed && (
+          <button
+            className="sidebar-footer-btn centered"
+            onClick={onLogout}
+            title="Déconnexion"
+          >
+            <LogOut size={15} />
+          </button>
+        )}
       </div>
     </aside>
   );
