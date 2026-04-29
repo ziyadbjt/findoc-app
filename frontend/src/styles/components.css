@@ -33,7 +33,7 @@
   overflow-x: hidden;
   scrollbar-width: none;
   isolation: isolate;
-  transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms ease;
+  transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1), margin-right 220ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .sidebar::before,
@@ -140,6 +140,7 @@
 .sidebar.collapsed {
   width: 62px;
   overflow: visible;
+  margin-right: 0;
 }
 
 .sidebar.collapsed .sidebar-brand {
@@ -187,24 +188,10 @@
   pointer-events: none;
 }
 
-.sidebar.collapsed::before,
-.sidebar.collapsed::after {
-  width: 62px;
-  right: auto;
-}
-
-.sidebar.collapsed:hover::before,
-.sidebar.collapsed:hover::after {
+.sidebar.collapsed:hover {
   width: 228px;
-}
-
-.sidebar.collapsed:hover .sidebar-brand,
-.sidebar.collapsed:hover .sidebar-dossier,
-.sidebar.collapsed:hover .sidebar-nav,
-.sidebar.collapsed:hover .sidebar-footer {
-  width: 228px;
-  position: relative;
-  z-index: 2;
+  margin-right: -166px;
+  box-shadow: 16px 0 40px rgba(0, 0, 0, 0.26);
 }
 
 .sidebar.collapsed:hover .sidebar-brand {
