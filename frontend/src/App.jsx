@@ -27,19 +27,28 @@ function PrivateRoute({ children }) {
   return children
 }
 
+function AnimatedRoutes() {
+  const location = useLocation()
+  return (
+    <div key={location.pathname} className="page-transition">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
+        <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
+        <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
       <ToastProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
-            <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
-            <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <AnimatedRoutes />
         </BrowserRouter>
       </ToastProvider>
     </AuthProvider>
