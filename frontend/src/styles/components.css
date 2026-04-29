@@ -28,11 +28,13 @@
 }
 
 .sidebar-surface {
-  width: 100%;
+  width: 228px;
   height: 100%;
   display: flex;
   flex-direction: column;
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.02), transparent 10%),
     linear-gradient(180deg, #0d211d 0%, #091815 48%, #081411 100%);
