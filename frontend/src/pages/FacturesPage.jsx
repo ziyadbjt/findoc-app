@@ -611,12 +611,12 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--line-0)", paddingBottom: 0 }}>
+      <div className="facture-tabs">
         {TABS.map((tabItem) => (
           <button
             key={tabItem.key}
+            className={`facture-tab${tab === tabItem.key ? " active" : ""}`}
             onClick={() => setTab(tabItem.key)}
-            style={{ padding: "9px 16px", fontSize: 13, fontWeight: tab === tabItem.key ? 500 : 400, color: tab === tabItem.key ? "var(--ink-0)" : "var(--ink-2)", background: "transparent", border: "none", borderBottom: tab === tabItem.key ? "2px solid var(--accent)" : "2px solid transparent", marginBottom: -1, cursor: "pointer", transition: "color 120ms" }}
           >
             {tabItem.label}
           </button>
@@ -628,20 +628,41 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
 
       {(tab === "achats" || tab === "ventes") && (
         <>
+          {/* Stats rapides */}
+          <div className="facture-stats">
+            {[
+              { label: "Total", val: formatMAD(tabFactures.reduce((s, f) => s + (f.montant_ttc || 0), 0)).split(",")[0], sub: `${tabFactures.length} facture${tabFactures.length > 1 ? "s" : ""}`, color: "var(--ink-0)" },
+              { label: "Payées", val: tabFactures.filter(f => f.paiement === "payee" || f.paiement === "payée").length, sub: formatMAD(tabFactures.filter(f => f.paiement === "payee" || f.paiement === "payée").reduce((s, f) => s + (f.montant_ttc || 0), 0)).split(",")[0] + " MAD", color: "var(--pos-ink)" },
+              { label: "En attente", val: tabFactures.filter(f => f.paiement === "en_attente").length, sub: formatMAD(tabFactures.filter(f => f.paiement === "en_attente").reduce((s, f) => s + (f.montant_ttc || 0), 0)).split(",")[0] + " MAD", color: "var(--warn-ink)" },
+              { label: "En retard", val: tabFactures.filter(f => f.paiement === "en_retard").length, sub: formatMAD(tabFactures.filter(f => f.paiement === "en_retard").reduce((s, f) => s + (f.montant_ttc || 0), 0)).split(",")[0] + " MAD", color: "var(--neg-ink)" },
+            ].map((s) => (
+              <div key={s.label} className="facture-stat">
+                <div className="facture-stat__val" style={{ color: s.color }}>{s.val}</div>
+                <div className="facture-stat__label">{s.label}</div>
+                <div className="facture-stat__sub">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
           <div className="filter-bar">
             <div className="filter-search">
               <Search size={14} />
-              <input placeholder="Fournisseur, numero facture..." value={q} onChange={(event) => setQ(event.target.value)} />
+              <input placeholder="Fournisseur, numéro facture..." value={q} onChange={(e) => setQ(e.target.value)} />
               {q && <button className="icon-btn" style={{ width: 20, height: 20 }} onClick={() => setQ("")}><X size={11} /></button>}
             </div>
             <div className="filter-chips">
-              {statuts.map((statut) => (
-                <button key={statut} className={`chip${statutFilter === statut ? " active" : ""}`} onClick={() => setStatutFilter(statut)}>
-                  {statut === "toutes" ? "Toutes" : statut === "traite" ? "Traitees" : statut === "a_valider" ? "A valider" : "En retard"}
-                </button>
-              ))}
+              <button className={`chip${statutFilter === "toutes" ? " active" : ""}`} onClick={() => setStatutFilter("toutes")}>Toutes</button>
+              <button className={`chip${statutFilter === "traite" ? " active" : ""}`} onClick={() => setStatutFilter("traite")}>
+                <span className="chip-dot pos" />Traitées
+              </button>
+              <button className={`chip${statutFilter === "a_valider" ? " active" : ""}`} onClick={() => setStatutFilter("a_valider")}>
+                <span className="chip-dot warn" />À valider
+              </button>
+              <button className={`chip${statutFilter === "en_retard" ? " active" : ""}`} onClick={() => setStatutFilter("en_retard")}>
+                <span className="chip-dot neg" />En retard
+              </button>
             </div>
-            <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--ink-2)" }}>{filtered.length} resultat{filtered.length > 1 ? "s" : ""}</div>
+            <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--ink-2)" }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</div>
           </div>
 
           {layout === "cards" ? (
@@ -664,33 +685,38 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                 <thead>
                   <tr>
                     <Th col="fournisseur">Fournisseur</Th>
-                    <Th col="num_facture">Numero Facture</Th>
+                    <Th col="num_facture">N° Facture</Th>
                     <Th col="date_facture">Date</Th>
-                    <Th col="date_echeance">Echeance</Th>
-                    <Th col="exercice_rattachement">Exercice</Th>
-                    <Th col="code_tiers">Code tiers</Th>
-                    <Th col="montant_ht" right>HT</Th>
-                    <Th col="tva" right>TVA</Th>
-                    <Th col="montant_ttc" right>TTC</Th>
+                    <Th col="date_echeance">Échéance</Th>
+                    <Th col="montant_ttc" right>Montant TTC</Th>
                     <th className="th">Statut</th>
                     <th className="th">Paiement</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--ink-3)", fontSize: 13 }}>Aucune facture</td></tr>}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--ink-3)", fontSize: 13 }}>
+                        <div style={{ marginBottom: 6 }}>Aucune facture</div>
+                        <div style={{ fontSize: 12 }}>Importez des factures via le bouton Importer</div>
+                      </td>
+                    </tr>
+                  )}
                   {filtered.map((facture) => (
                     <tr key={facture.id} className="tr-hover" onClick={() => setSelected(facture)} style={{ cursor: "pointer" }}>
-                      <td className="td" style={{ fontWeight: 500 }}>{facture.fournisseur || "-"}</td>
-                      <td className="td mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{facture.num_facture || "-"}</td>
-                      <td className="td">{formatDateShort(facture.date_facture)}</td>
-                      <td className="td" style={{ color: facture.paiement === "en_retard" ? "var(--neg-ink)" : undefined }}>{formatDateShort(facture.date_echeance)}</td>
-                      <td className="td mono" style={{ fontSize: 11, color: facture.traitement_comptable && facture.traitement_comptable !== "exercice_courant" ? "var(--warn-ink)" : "var(--ink-2)" }}>
-                        {facture.exercice_rattachement || (facture.date_facture || "").slice(0, 4) || "-"}
+                      <td className="td">
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{facture.fournisseur || "—"}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{facture.code_tiers || facture.categorie || ""}</div>
                       </td>
-                      <td className="td mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{facture.code_tiers || "-"}</td>
-                      <td className="td right tabular">{formatMAD(facture.montant_ht).split(",")[0]}</td>
-                      <td className="td right tabular" style={{ color: "var(--ink-2)" }}>{formatMAD(facture.tva).split(",")[0]}</td>
-                      <td className="td right tabular" style={{ fontWeight: 500 }}>{formatMAD(facture.montant_ttc).split(",")[0]}</td>
+                      <td className="td mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{facture.num_facture || "—"}</td>
+                      <td className="td" style={{ fontSize: 12.5 }}>{formatDateShort(facture.date_facture)}</td>
+                      <td className="td" style={{ fontSize: 12.5, color: facture.paiement === "en_retard" ? "var(--neg-ink)" : "var(--ink-1)", fontWeight: facture.paiement === "en_retard" ? 600 : 400 }}>
+                        {formatDateShort(facture.date_echeance)}
+                      </td>
+                      <td className="td right">
+                        <div className="tabular" style={{ fontWeight: 600, fontSize: 13 }}>{formatMAD(facture.montant_ttc).split(",")[0]} <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400 }}>MAD</span></div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>HT {formatMAD(facture.montant_ht).split(",")[0]}</div>
+                      </td>
                       <td className="td"><StatutBadge statut={facture.statut} /></td>
                       <td className="td"><PaiementBadge paiement={facture.paiement} /></td>
                     </tr>
@@ -698,11 +724,13 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                 </tbody>
                 {filtered.length > 0 && (
                   <tfoot>
-                    <tr style={{ borderTop: "1px solid var(--line-1)", background: "var(--bg-inset)" }}>
-                      <td colSpan={6} className="td" style={{ fontWeight: 500, fontSize: 12 }}>Total · {filtered.length} factures</td>
-                      <td className="td right tabular" style={{ fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.montant_ht || 0), 0)).split(",")[0]}</td>
-                      <td className="td right tabular" style={{ color: "var(--ink-2)", fontWeight: 500 }}>{formatMAD(filtered.reduce((sum, facture) => sum + (facture.tva || 0), 0)).split(",")[0]}</td>
-                      <td className="td right tabular" style={{ fontWeight: 600 }}>{formatMAD(totalTTC).split(",")[0]}</td>
+                    <tr style={{ borderTop: "2px solid var(--line-0)", background: "var(--bg-inset)" }}>
+                      <td colSpan={4} className="td" style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)" }}>
+                        Total · {filtered.length} facture{filtered.length > 1 ? "s" : ""}
+                      </td>
+                      <td className="td right tabular" style={{ fontWeight: 700, fontSize: 14 }}>
+                        {formatMAD(totalTTC).split(",")[0]} <span style={{ fontSize: 10, fontWeight: 400, color: "var(--ink-3)" }}>MAD</span>
+                      </td>
                       <td colSpan={2} />
                     </tr>
                   </tfoot>
