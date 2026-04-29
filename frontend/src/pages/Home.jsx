@@ -119,9 +119,9 @@ export default function Home() {
             </span>
 
             <h1 className="home-title">
-              Clôturez plus vite.<br />
-              Relancez à temps.<br />
-              <span className="home-title__accent">Dormez tranquille.</span>
+              Automatisez la saisie.<br />
+              Accélérez la clôture.<br />
+              <span className="home-title__accent">Maîtrisez vos délais.</span>
             </h1>
 
             <p className="home-subtitle">
