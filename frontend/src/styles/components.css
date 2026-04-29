@@ -1,5 +1,138 @@
 /* Component styles — Aethelgard dark-emerald */
 
+/* ── App shell (sidebar + content) ──────────── */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-0);
+}
+
+.app-shell-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────── */
+.sidebar {
+  width: 228px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #0c1f1c 0%, #091a17 100%);
+  border-right: 1px solid rgba(143, 212, 188, 0.10);
+  z-index: 20;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sidebar::-webkit-scrollbar { display: none; }
+
+.sidebar-brand {
+  padding: 20px 18px 14px;
+  border-bottom: 1px solid rgba(143, 212, 188, 0.08);
+  flex-shrink: 0;
+}
+
+.sidebar-brand__logo {
+  height: 26px;
+  width: auto;
+  display: block;
+}
+
+.sidebar-dossier {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  margin: 10px 10px 4px;
+  border: 1px solid rgba(143, 212, 188, 0.18);
+  border-radius: 8px;
+  background: rgba(143, 212, 188, 0.07);
+  color: var(--ink-0);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  transition: background 140ms, border-color 140ms;
+  flex-shrink: 0;
+}
+
+.sidebar-dossier:hover {
+  background: rgba(143, 212, 188, 0.13);
+  border-color: rgba(143, 212, 188, 0.28);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar { display: none; }
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  color: rgba(200, 212, 206, 0.72);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 130ms, color 130ms;
+  border: 1px solid transparent;
+  text-align: left;
+  width: 100%;
+}
+
+.sidebar-item:hover {
+  background: rgba(143, 212, 188, 0.10);
+  color: var(--ink-0);
+}
+
+.sidebar-item.active {
+  background: rgba(143, 212, 188, 0.15);
+  color: #b4e8d6;
+  border-color: rgba(143, 212, 188, 0.20);
+  font-weight: 600;
+}
+
+.sidebar-badge {
+  margin-left: auto;
+  background: rgba(212, 185, 106, 0.20);
+  color: var(--accent-ink);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--r-full);
+  font-family: var(--font-mono);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: rgba(143, 212, 188, 0.08);
+  margin: 6px 8px;
+}
+
+.sidebar-footer {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(143, 212, 188, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* legacy — keep for any page still using it */
 .app-topnav {
   display: flex;
   flex-direction: column;
@@ -40,21 +173,19 @@
   object-fit: contain;
 }
 
-/* ── Top navigation bar ──────────────────────── */
+/* ── Top navigation bar (action strip) ───────── */
 .topnav {
-  height: 54px;
+  height: 48px;
   display: flex;
   align-items: center;
   padding: 0 20px;
   gap: 0;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(143, 212, 188, 0.16);
-  background:
-    radial-gradient(circle at 0% 50%, rgba(143, 212, 188, 0.10), transparent 18%),
-    linear-gradient(90deg, #113a34 0%, #0b2e29 34%, #07231f 100%);
+  border-bottom: 1px solid rgba(143, 212, 188, 0.10);
+  background: var(--bg-0);
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 10;
 }
 
 .topnav-brand {

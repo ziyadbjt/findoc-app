@@ -284,66 +284,71 @@ export default function Dashboard() {
   const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user, currentExercise };
 
   return (
-    <div className="app-topnav" data-density={density}>
-      <Topbar
+    <div className="app-shell" data-density={density}>
+      <Sidebar
         route={route}
         setRoute={setRoute}
         dossier={dossier}
         onSwitchDossier={handleSwitchDossier}
         counts={counts}
         onLogout={handleLogout}
-        onOpenCmd={() => setShowCmd(true)}
-        onOpenNotifs={() => setShowNotifs(true)}
-        onOpenChat={() => setShowChat(true)}
         onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")}
         theme={theme}
-        hasNotifs={MOCK_NOTIFICATIONS.length > 0}
-        currentExercise={currentExercise}
-        onChangeExercise={handleChangeExercise}
       />
 
-      <main
-        ref={pageRef}
-        className="page"
-        style={{
-          background: "transparent",
-          transform: pullDistance ? `translateY(${pullDistance}px)` : undefined,
-          transition: pullRefreshing || pullDistance === 0 ? "transform 180ms ease" : "none",
-        }}
-      >
-        <div
-          className={`pull-refresh-indicator ${pullDistance > 6 ? "visible" : ""} ${pullRefreshing ? "refreshing" : ""}`}
+      <div className="app-shell-content">
+        <Topbar
+          onOpenCmd={() => setShowCmd(true)}
+          onOpenNotifs={() => setShowNotifs(true)}
+          onOpenChat={() => setShowChat(true)}
+          hasNotifs={MOCK_NOTIFICATIONS.length > 0}
+          currentExercise={currentExercise}
+          onChangeExercise={handleChangeExercise}
+        />
+
+        <main
+          ref={pageRef}
+          className="page"
           style={{
-            opacity: pullDistance ? 1 : 0,
-            transform: `translate(-50%, ${Math.max(-10, pullDistance - 56)}px)`,
+            background: "transparent",
+            transform: pullDistance ? `translateY(${pullDistance}px)` : undefined,
+            transition: pullRefreshing || pullDistance === 0 ? "transform 180ms ease" : "none",
           }}
         >
-          <RefreshCw size={14} />
-          <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
-        </div>
-        <div key={route} className="page-transition">
-          {loadingData && (
-            <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
-              {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton" style={{ height: i === 1 ? 120 : 60, borderRadius: 12, width: i === 3 ? "60%" : "100%" }} />
-              ))}
-            </div>
-          )}
-          {!loadingData && route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-          {!loadingData && route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-          {!loadingData && route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-          {!loadingData && route === "relances" && <RelancesPage {...pageProps} />}
-          {!loadingData && route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
-          {!loadingData && route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
-          {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />}
-          {!loadingData && route === "audit" && <AuditPage dossier={dossier} user={user} />}
-          {!loadingData && route === "anomalies" && <AnomaliesPage factures={factures} />}
-          {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
-          {!loadingData && route === "reconciliation" && <ReconciliationPage factures={factures} dossierId={id} />}
-          {!loadingData && route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
-          {!loadingData && route === "rapport_mensuel" && <RapportMensuelPage dossierId={id} dossier={dossier} />}
-        </div>
-      </main>
+          <div
+            className={`pull-refresh-indicator ${pullDistance > 6 ? "visible" : ""} ${pullRefreshing ? "refreshing" : ""}`}
+            style={{
+              opacity: pullDistance ? 1 : 0,
+              transform: `translate(-50%, ${Math.max(-10, pullDistance - 56)}px)`,
+            }}
+          >
+            <RefreshCw size={14} />
+            <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
+          </div>
+          <div key={route} className="page-transition">
+            {loadingData && (
+              <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="skeleton" style={{ height: i === 1 ? 120 : 60, borderRadius: 12, width: i === 3 ? "60%" : "100%" }} />
+                ))}
+              </div>
+            )}
+            {!loadingData && route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
+            {!loadingData && route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
+            {!loadingData && route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
+            {!loadingData && route === "relances" && <RelancesPage {...pageProps} />}
+            {!loadingData && route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
+            {!loadingData && route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
+            {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />}
+            {!loadingData && route === "audit" && <AuditPage dossier={dossier} user={user} />}
+            {!loadingData && route === "anomalies" && <AnomaliesPage factures={factures} />}
+            {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
+            {!loadingData && route === "reconciliation" && <ReconciliationPage factures={factures} dossierId={id} />}
+            {!loadingData && route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
+            {!loadingData && route === "rapport_mensuel" && <RapportMensuelPage dossierId={id} dossier={dossier} />}
+          </div>
+        </main>
+      </div>
 
       <CmdK
         open={showCmd}

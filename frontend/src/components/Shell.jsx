@@ -40,90 +40,104 @@ export function DossierAvatar({ dossier, size = 28 }) {
   );
 }
 
-export function Sidebar() { return null; }
+export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, onToggleTheme, theme }) {
+  const primaryNav = [
+    { key: "overview",       label: "Aperçu",      icon: <Home size={15} /> },
+    { key: "factures",       label: "Factures",     icon: <FileText size={15} />, badge: counts?.factures },
+    { key: "delai_paiement", label: "Délais",       icon: <GitMerge size={15} />, badge: counts?.relances },
+    { key: "relances",       label: "Relances",     icon: <Mail size={15} /> },
+    { key: "tiers",          label: "Tiers",        icon: <Building2 size={15} /> },
+    { key: "tva",            label: "TVA",          icon: <Receipt size={15} /> },
+    { key: "treso",          label: "Trésorerie",   icon: <TrendingUp size={15} /> },
+  ];
 
-export function Topbar({ route, setRoute, dossier, onSwitchDossier, counts, onLogout, tiersType, setTiersType, onOpenCmd, onOpenNotifs, onOpenChat, onToggleTheme, theme, hasNotifs, currentExercise, onChangeExercise }) {
-  const nav = [
-    { key: "overview",       label: "Aperçu",          icon: <Home size={14} /> },
-    { key: "factures",       label: "Factures",         icon: <FileText size={14} />, badge: counts?.factures },
-    { key: "delai_paiement", label: "Délais",           icon: <GitMerge size={14} />, badge: counts?.relances },
-    { key: "relances",       label: "Relances",         icon: <Mail size={14} /> },
-    { key: "tiers",          label: "Tiers",            icon: <Building2 size={14} /> },
-    { key: "tva",            label: "TVA",              icon: <Receipt size={14} /> },
-    { key: "treso",          label: "Trésorerie",       icon: <TrendingUp size={14} /> },
-    { key: "anomalies",      label: "Anomalies",        icon: <AlertTriangle size={14} /> },
-    { key: "audit",          label: "Audit",            icon: <ShieldCheck size={14} /> },
-    { key: "journal",        label: "Extraction",       icon: <Database size={14} /> },
-    { key: "parametres",     label: "Paramètres",       icon: <Settings size={14} /> },
+  const secondaryNav = [
+    { key: "anomalies",  label: "Anomalies",  icon: <AlertTriangle size={15} /> },
+    { key: "audit",      label: "Audit",      icon: <ShieldCheck size={15} /> },
+    { key: "journal",    label: "Extraction", icon: <Database size={15} /> },
+    { key: "parametres", label: "Paramètres", icon: <Settings size={15} /> },
   ];
 
   return (
-    <header className="topnav">
+    <aside className="sidebar">
       {/* Brand */}
-      <div className="topnav-brand">
-        <BrandLogo className="topnav-brand__logo" surface="app" theme={theme} />
+      <div className="sidebar-brand">
+        <BrandLogo className="sidebar-brand__logo" surface="app" theme={theme} />
       </div>
 
       {/* Dossier switcher */}
-      <button className="topnav-dossier" onClick={onSwitchDossier}>
-        <DossierAvatar dossier={dossier} size={24} />
-        <span className="truncate" style={{ maxWidth: 160, fontSize: 12, fontWeight: 500 }}>
+      <button className="sidebar-dossier" onClick={onSwitchDossier}>
+        <DossierAvatar dossier={dossier} size={26} />
+        <span className="truncate" style={{ flex: 1, textAlign: "left", fontSize: 12, fontWeight: 500 }}>
           {dossier?.raison_sociale || "Sélectionner un dossier"}
         </span>
-        <ChevronsUpDown size={13} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
+        <ChevronsUpDown size={12} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
       </button>
+
+      {/* Navigation */}
+      <nav className="sidebar-nav">
+        {primaryNav.map((n) => (
+          <button
+            key={n.key}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
+            <span>{n.label}</span>
+            {n.badge > 0 && <span className="sidebar-badge">{n.badge}</span>}
+          </button>
+        ))}
+
+        <div className="sidebar-divider" />
+
+        {secondaryNav.map((n) => (
+          <button
+            key={n.key}
+            className={`sidebar-item${route === n.key ? " active" : ""}`}
+            onClick={() => setRoute(n.key)}
+          >
+            {n.icon}
+            <span>{n.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="sidebar-footer">
+        <button className="icon-btn" onClick={onToggleTheme} title="Thème">
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+        <button className="icon-btn" onClick={onLogout} title="Déconnexion" style={{ marginLeft: "auto" }}>
+          <LogOut size={14} />
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+export function Topbar({ onOpenCmd, onOpenNotifs, onOpenChat, hasNotifs, currentExercise, onChangeExercise }) {
+  return (
+    <header className="topnav">
       <label className="topnav-exercise">
         <span>Exercice</span>
-        <select value={currentExercise || new Date().getFullYear()} onChange={(event) => onChangeExercise?.(Number(event.target.value))}>
-          {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() + 2 - index).map((year) => (
+        <select value={currentExercise || new Date().getFullYear()} onChange={(e) => onChangeExercise?.(Number(e.target.value))}>
+          {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() + 2 - i).map((year) => (
             <option key={year} value={year}>{year}</option>
           ))}
         </select>
       </label>
 
-      {/* Nav links */}
-      <nav className="topnav-links">
-        {nav.filter(n => n.key !== "parametres").map((n) => (
-          <button
-            key={n.key}
-            className={`topnav-item${route === n.key ? " active" : ""}`}
-            onClick={() => setRoute(n.key)}
-            title={n.label}
-          >
-            {n.icon}
-            <span className="topnav-item-label">{n.label}</span>
-            {n.badge > 0 && <span className="topnav-badge">{n.badge}</span>}
-          </button>
-        ))}
-        <button
-          className={`topnav-item${route === "parametres" ? " active" : ""}`}
-          onClick={() => setRoute("parametres")}
-          title="Paramètres"
-          style={{ marginLeft: "auto" }}
-        >
-          <Settings size={14} />
-          <span className="topnav-item-label">Paramètres</span>
-        </button>
-      </nav>
-
-      {/* Right actions */}
-      <div className="topnav-actions">
+      <div className="topnav-actions" style={{ marginLeft: "auto" }}>
         <button className="topnav-search" onClick={onOpenCmd}>
           <Search size={13} />
           <span>Rechercher</span>
           <kbd>Ctrl K</kbd>
         </button>
-        <button className="icon-btn" onClick={onToggleTheme} title="Thème">
-          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
-        <button className="icon-btn" onClick={onOpenChat} title="Assistant">
+        <button className="icon-btn" onClick={onOpenChat} title="Assistant IA">
           <MessageSquare size={14} />
         </button>
         <button className={`icon-btn${hasNotifs ? " has-dot" : ""}`} onClick={onOpenNotifs} title="Notifications">
           <Bell size={14} />
-        </button>
-        <button className="icon-btn" onClick={onLogout} title="Déconnexion">
-          <LogOut size={14} />
         </button>
       </div>
     </header>
