@@ -21,7 +21,6 @@ import {
   getFactures,
   updateAdminUser,
 } from "../api";
-import BrandLogo from "../components/BrandLogo";
 import { DossierAvatar } from "../components/Shell";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -273,7 +272,7 @@ export default function AdminPage() {
       <div style={{ minHeight: "100vh", background: "var(--bg-0)", color: "var(--ink-0)" }}>
         <header style={{ padding: "18px 32px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <BrandLogo surface="app" theme={theme} className="admin-brand-logo" />
+            <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
             <span style={{ fontWeight: 600, fontSize: 14 }}>Administration</span>
           </div>
           <button className="icon-btn" onClick={() => { logout(); navigate("/login"); }} title="Deconnexion">↗</button>
@@ -296,7 +295,7 @@ export default function AdminPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-0)" }}>
       <header style={{ padding: "18px 32px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-1)" }}>
-        <div className="brand-mark">F</div>
+        <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Administration cabinet</div>
           <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>Pilotage des dossiers, alertes et acces de l'organisation</div>
