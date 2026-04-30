@@ -22,8 +22,11 @@ export default function OverlayPortal({
     if (!lockScroll) return undefined;
 
     const body = document.body;
-    const previousOverflow = body.style.overflow;
     const currentCount = Number(body.dataset.overlayLockCount || "0");
+
+    if (currentCount === 0) {
+      body.dataset.overlayLockOverflow = body.style.overflow || "";
+    }
 
     body.dataset.overlayLockCount = String(currentCount + 1);
     body.style.overflow = "hidden";
@@ -32,7 +35,9 @@ export default function OverlayPortal({
       const nextCount = Math.max(0, Number(body.dataset.overlayLockCount || "1") - 1);
 
       if (nextCount === 0) {
+        const previousOverflow = body.dataset.overlayLockOverflow || "";
         delete body.dataset.overlayLockCount;
+        delete body.dataset.overlayLockOverflow;
         body.style.overflow = previousOverflow;
         return;
       }

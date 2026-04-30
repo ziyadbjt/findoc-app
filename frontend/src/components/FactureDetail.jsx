@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, Upload, ChevronDown } from "lucide-react";
+import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 import { useCorrection } from "../hooks/useCorrection";
 import { getFactureFile, updateFacture } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import OverlayPortal from "./OverlayPortal";
+import Drawer from "./Drawer";
 
-export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId }) {
+export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId, reviewQueue = [], onSelectFacture, onAdvanceAfterDecision }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
   const [editing, setEditing] = useState(null);
@@ -17,7 +17,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const { token } = useAuth();
   const toast = useToast();
 
-  useEffect(() => { setLocalF(facture); }, [facture?.id]);
+  useEffect(() => { setLocalF(facture); }, [facture]);
 
   useEffect(() => {
     let active = true;
@@ -45,9 +45,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
     };
   }, [facture?.id, token]);
 
-  if (!facture) return null;
-
-  const update = async (key, value) => {
+  const update = async (key, value, options = {}) => {
     const original = localF[key];
     const next = { ...localF, [key]: value };
     if (key === "montant_ht" || key === "tva_taux") {
@@ -62,6 +60,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
       const saved = { ...next, ...response.data };
       setLocalF(saved);
       onUpdate?.(saved);
+      if (options.advanceReview) onAdvanceAfterDecision?.(saved);
     } catch {
       setLocalF(localF);
       toast("Correction non sauvegardée", "neg");
@@ -87,11 +86,55 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const hasAccountingAlert =
     localF.traitement_comptable &&
     localF.traitement_comptable !== "exercice_courant";
+  const currentReviewIndex = reviewQueue.findIndex((item) => String(item.id) === String(localF.id));
+  const hasReviewQueue = currentReviewIndex >= 0 && reviewQueue.length > 1;
+  const previousReviewFacture = hasReviewQueue ? reviewQueue[currentReviewIndex - 1] : null;
+  const nextReviewFacture = hasReviewQueue ? reviewQueue[currentReviewIndex + 1] : null;
+
+  useEffect(() => {
+    if (!facture || !hasReviewQueue) return undefined;
+
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLElement &&
+        (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable
+        );
+      if (isEditableTarget) return;
+
+      if (event.key === "ArrowLeft" && previousReviewFacture) {
+        event.preventDefault();
+        onSelectFacture?.(previousReviewFacture);
+      }
+      if (event.key === "ArrowRight" && nextReviewFacture) {
+        event.preventDefault();
+        onSelectFacture?.(nextReviewFacture);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [facture, hasReviewQueue, nextReviewFacture, onSelectFacture, previousReviewFacture]);
+
+  const handleDecision = (status) => {
+    update("validation_status", status, { advanceReview: true });
+  };
+
+  if (!facture) return null;
 
   return (
-    <OverlayPortal onClose={onClose}>
-      <div className="scrim" onClick={onClose} />
-      <div className="drawer invoice-review-drawer">
+    <Drawer
+      open={!!facture}
+      onClose={onClose}
+      placement="center"
+      className="invoice-review-drawer"
+      closeOnBackdrop
+      bodyClassName="invoice-review-drawer-body"
+    >
         <section className="invoice-review-viewer">
           <div className="invoice-review-toolbar">
             <button className="invoice-icon-btn" onClick={onClose} title="Fermer"><X size={16} /></button>
@@ -112,6 +155,27 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
             <div>
               <h2>{localF.fournisseur || "Fournisseur à confirmer"}</h2>
               <div className="invoice-summary-meta">{localF.num_facture || "Sans numéro"} · {formatDate(localF.date_facture)}</div>
+              {hasReviewQueue && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                  <button
+                    className="btn btn-ghost sm"
+                    onClick={() => previousReviewFacture && onSelectFacture?.(previousReviewFacture)}
+                    disabled={!previousReviewFacture}
+                  >
+                    <ChevronLeft size={13} /> Précédente
+                  </button>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>
+                    {currentReviewIndex + 1} / {reviewQueue.length}
+                  </span>
+                  <button
+                    className="btn btn-ghost sm"
+                    onClick={() => nextReviewFacture && onSelectFacture?.(nextReviewFacture)}
+                    disabled={!nextReviewFacture}
+                  >
+                    Suivante <ChevronRight size={13} />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="invoice-summary-amount">
               <strong>{formatMAD(localF.montant_ttc)} MAD</strong>
@@ -209,16 +273,15 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
           </div>
 
           <div className="invoice-actionbar">
-            <button className="invoice-secondary-btn" onClick={() => update("validation_status", "a_verifier")} disabled={saving}>
+            <button className="invoice-secondary-btn" onClick={() => handleDecision("a_verifier")} disabled={saving}>
               À vérifier
             </button>
-            <button className="invoice-primary-btn" onClick={() => update("validation_status", "valide")} disabled={saving}>
+            <button className="invoice-primary-btn" onClick={() => handleDecision("valide")} disabled={saving}>
               <Check size={16} /> {saving ? "Sauvegarde..." : "Valider facture"}
             </button>
           </div>
         </aside>
-      </div>
-    </OverlayPortal>
+    </Drawer>
   );
 }
 

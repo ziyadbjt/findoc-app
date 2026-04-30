@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as XLSX from "xlsx";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
 import { uploadBankStatement, uploadFactures } from "../api";
+import Modal from "../components/Modal";
 import ExportDialog from "../components/ExportDialog";
 import FactureDetail from "../components/FactureDetail";
-import OverlayPortal from "../components/OverlayPortal";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { formatMAD, formatDate, formatDateShort } from "../utils/format";
@@ -19,6 +18,20 @@ const TABS = [
 ];
 
 const buildTpeStorageKey = (dossierId) => `tpe-transactions:${dossierId || "demo"}`;
+const buildImportHistoryKey = (dossierId) => `facture-import-history:${dossierId || "demo"}`;
+
+function isFactureReviewNeeded(facture) {
+  return (
+    facture?.validation_status === "a_verifier" ||
+    (facture?.confidence != null && facture.confidence < 0.8)
+  );
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return "0 Ko";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
 
 
 function StatutBadge({ statut }) {
@@ -266,7 +279,7 @@ function BanqueTab({ factures, dossierId }) {
 }
 
 
-function TPETab({ dossierId, transactions, setTransactions, onExport }) {
+function TPETab({ transactions, setTransactions, onExport }) {
   const toast = useToast();
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -326,6 +339,7 @@ function TPETab({ dossierId, transactions, setTransactions, onExport }) {
       if (file.name.toLowerCase().endsWith(".json")) {
         rows = normalizeJsonRows(JSON.parse(await file.text()));
       } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        const XLSX = await import("xlsx");
         const buffer = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -435,7 +449,11 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const [showExport, setShowExport] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("idle");
   const [uploadFiles, setUploadFiles] = useState([]);
+  const [lastImportSummary, setLastImportSummary] = useState(null);
+  const [importHistory, setImportHistory] = useState([]);
   const [tpeTransactions, setTpeTransactions] = useState([]);
   const fileRef = useRef(null);
 
@@ -472,15 +490,29 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   }, [dossierId]);
 
   useEffect(() => {
+    try {
+      setImportHistory(JSON.parse(sessionStorage.getItem(buildImportHistoryKey(dossierId)) || "[]"));
+    } catch {
+      setImportHistory([]);
+    }
+  }, [dossierId]);
+
+  useEffect(() => {
     localStorage.setItem(buildTpeStorageKey(dossierId), JSON.stringify(tpeTransactions));
   }, [dossierId, tpeTransactions]);
 
+  useEffect(() => {
+    sessionStorage.setItem(buildImportHistoryKey(dossierId), JSON.stringify(importHistory));
+  }, [dossierId, importHistory]);
+
   const tabFactures = factures.filter((facture) => (tab === "achats" ? (facture.type || "achat") === "achat" : tab === "ventes" ? facture.type === "vente" : true));
 
-  const statuts = ["toutes", "traite", "a_valider", "en_retard"];
   const filtered = tabFactures
     .filter((facture) => {
-      if (statutFilter !== "toutes" && facture.statut !== statutFilter && !(statutFilter === "en_retard" && facture.paiement === "en_retard")) return false;
+      if (statutFilter === "traite" && facture.statut !== "traite" && facture.statut !== "traité") return false;
+      if (statutFilter === "a_valider" && facture.statut !== "a_valider" && facture.statut !== "à_valider") return false;
+      if (statutFilter === "a_verifier" && !isFactureReviewNeeded(facture)) return false;
+      if (statutFilter === "en_retard" && facture.paiement !== "en_retard") return false;
       if (q.trim()) {
         const qq = q.toLowerCase();
         if (!(facture.fournisseur || "").toLowerCase().includes(qq) && !(facture.num_facture || "").toLowerCase().includes(qq) && !(facture.code_tiers || "").toLowerCase().includes(qq)) return false;
@@ -519,30 +551,77 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
   const handleUpload = async () => {
     if (!uploadFiles.length) return;
     setUploading(true);
+    setUploadProgress(0);
+    setUploadStage("uploading");
     try {
-      const response = await uploadFactures(token, dossierId, uploadFiles);
+      const response = await uploadFactures(token, dossierId, uploadFiles, {
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          setUploadProgress(Math.min(95, Math.round((event.loaded / event.total) * 100)));
+        },
+      });
+      setUploadStage("processing");
+      setUploadProgress(100);
       const results = response.data?.resultats || [];
       const fallbackCount = results.filter((row) => row.source_ai === "fallback").length;
+      const errorCount = results.filter((row) => row.statut === "erreur").length;
+      const reviewCount = results.filter((row) => isFactureReviewNeeded({
+        confidence: row.confiance,
+        validation_status: row.validation_status,
+      })).length;
+      const importedIds = results.map((row) => row.id).filter(Boolean);
+      const nextSummary = {
+        batchId: `${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        total: uploadFiles.length,
+        successCount: results.length - errorCount,
+        errorCount,
+        fallbackCount,
+        reviewCount,
+        importedIds,
+        items: results,
+      };
+      setLastImportSummary(nextSummary);
+      setImportHistory((current) => [nextSummary, ...current].slice(0, 5));
       toast(
-        fallbackCount
-          ? `${uploadFiles.length} fichier(s) importé(s), ${fallbackCount} à vérifier (Claude non disponible ou lecture faible)`
-          : `${uploadFiles.length} facture(s) extraite(s)`,
-        fallbackCount ? "warn" : "pos"
+        errorCount
+          ? `${results.length - errorCount} facture(s) importée(s), ${errorCount} fichier(s) en erreur`
+          : fallbackCount
+            ? `${uploadFiles.length} fichier(s) importé(s), ${fallbackCount} à vérifier (Claude non disponible ou lecture faible)`
+            : `${uploadFiles.length} facture(s) extraite(s)`,
+        errorCount || fallbackCount ? "warn" : "pos"
       );
       setShowUpload(false);
       setUploadFiles([]);
       onRefresh();
-    } catch {
-      toast("Erreur upload", "neg");
+    } catch (error) {
+      const detail = error?.response?.data?.detail;
+      toast(typeof detail === "string" ? detail : "Erreur upload", "neg");
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      setUploadStage("idle");
     }
   };
 
   const totalTTC = filtered.reduce((sum, facture) => sum + (facture.montant_ttc || 0), 0);
-  const lowConfidenceFactures = useMemo(
-    () => factures.filter(f => f.confidence != null && f.confidence < 0.8 && f.statut !== "erreur"),
+  const reviewFactures = useMemo(
+    () => factures.filter((f) => f.statut !== "erreur" && isFactureReviewNeeded(f)),
     [factures]
+  );
+  const importedReviewFactures = useMemo(() => {
+    if (!lastImportSummary?.importedIds?.length) return [];
+    const importedIds = new Set(lastImportSummary.importedIds.map(String));
+    return factures.filter((facture) => importedIds.has(String(facture.id)) && isFactureReviewNeeded(facture));
+  }, [factures, lastImportSummary]);
+  const getReviewFacturesForSummary = useCallback((summary) => {
+    if (!summary?.importedIds?.length) return [];
+    const importedIds = new Set(summary.importedIds.map(String));
+    return factures.filter((facture) => importedIds.has(String(facture.id)) && isFactureReviewNeeded(facture));
+  }, [factures]);
+  const uploadTotalBytes = useMemo(
+    () => uploadFiles.reduce((sum, file) => sum + (file.size || 0), 0),
+    [uploadFiles]
   );
   const [showBatchValidation, setShowBatchValidation] = useState(false);
 
@@ -559,7 +638,102 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         </div>
       </div>
 
-      {lowConfidenceFactures.length > 0 && (
+      {importHistory.length > 0 && (
+        <div className="card" style={{ padding: 16, marginBottom: 14, background: "var(--bg-1)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Historique des derniers lots</div>
+            <button
+              className="btn btn-ghost sm"
+              onClick={() => {
+                setImportHistory([]);
+                setLastImportSummary(null);
+              }}
+            >
+              Vider
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {importHistory.map((summary, index) => {
+              const summaryReviewFactures = getReviewFacturesForSummary(summary);
+              return (
+                <div key={summary.batchId || `${summary.createdAt}-${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, background: "var(--bg-inset)", border: "1px solid var(--line-1)", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                      Lot {index === 0 ? "récent" : `#${importHistory.length - index}`} · {summary.successCount} traitée{summary.successCount > 1 ? "s" : ""} / {summary.total}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>
+                      {new Date(summary.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                      {summary.errorCount > 0 ? ` · ${summary.errorCount} erreur(s)` : ""}
+                      {summaryReviewFactures.length > 0 ? ` · ${summaryReviewFactures.length} à revoir` : ""}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {summaryReviewFactures.length > 0 && (
+                      <button className="btn btn-secondary sm" onClick={() => setSelected(summaryReviewFactures[0])}>
+                        <Sparkles size={12} /> Reprendre la revue
+                      </button>
+                    )}
+                    <button className="btn btn-ghost sm" onClick={() => setLastImportSummary(summary)}>
+                      Voir le résumé
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {lastImportSummary && (
+        <div className="card" style={{ padding: 16, marginBottom: 14, background: "var(--bg-1)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                Dernier import · {lastImportSummary.successCount} facture{lastImportSummary.successCount > 1 ? "s" : ""} traitée{lastImportSummary.successCount > 1 ? "s" : ""}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                {lastImportSummary.errorCount > 0 ? `${lastImportSummary.errorCount} fichier(s) en erreur · ` : ""}
+                {lastImportSummary.reviewCount > 0 ? `${lastImportSummary.reviewCount} extraction(s) à revoir · ` : ""}
+                {lastImportSummary.fallbackCount > 0 ? `${lastImportSummary.fallbackCount} passée(s) en lecture fallback` : "Import analysé et classé."}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {importedReviewFactures.length > 0 && (
+                <button className="btn btn-secondary" onClick={() => setSelected(importedReviewFactures[0])}>
+                  <Sparkles size={13} /> Ouvrir la première à revoir
+                </button>
+              )}
+              <button className="btn btn-ghost" onClick={() => setLastImportSummary(null)}>
+                Fermer
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 14 }}>
+            {[
+              { label: "Traitées", value: lastImportSummary.successCount, tone: "var(--ink-0)" },
+              { label: "À revoir", value: importedReviewFactures.length, tone: "var(--warn-ink)" },
+              { label: "Fallback IA", value: lastImportSummary.fallbackCount, tone: "var(--accent-ink)" },
+              { label: "Erreurs", value: lastImportSummary.errorCount, tone: "var(--neg-ink)" },
+            ].map((item) => (
+              <div key={item.label} style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-inset)", border: "1px solid var(--line-1)" }}>
+                <div style={{ fontSize: 11, color: "var(--ink-2)", marginBottom: 4 }}>{item.label}</div>
+                <div className="tabular" style={{ fontSize: 18, fontWeight: 700, color: item.tone }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+          {lastImportSummary.errorCount > 0 && (
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              {lastImportSummary.items.filter((item) => item.statut === "erreur").map((item) => (
+                <div key={item.fichier} style={{ fontSize: 12, color: "var(--neg-ink)", background: "var(--neg-bg)", border: "1px solid color-mix(in srgb, var(--neg-ink) 20%, transparent)", borderRadius: 8, padding: "8px 10px" }}>
+                  {item.fichier} n'a pas pu être traité. Vérifiez le format ou réessayez l'import.
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {reviewFactures.length > 0 && (
         <div style={{
           background: "var(--warn-bg)", borderRadius: 10, padding: "12px 16px",
           marginBottom: 14, display: "flex", alignItems: "center", gap: 12,
@@ -568,12 +742,19 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
           <Sparkles size={15} style={{ color: "var(--warn-ink)", flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--warn-ink)" }}>
-              {lowConfidenceFactures.length} facture{lowConfidenceFactures.length > 1 ? "s" : ""} à valider
+              {reviewFactures.length} facture{reviewFactures.length > 1 ? "s" : ""} à revoir
             </span>
             <span style={{ fontSize: 12, color: "var(--ink-2)", marginLeft: 8 }}>
-              Confiance d'extraction &lt; 80% — vérifiez les montants extraits
+              Confiance d'extraction faible ou rattachement comptable à vérifier
             </span>
           </div>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12 }}
+            onClick={() => setSelected(reviewFactures[0])}
+          >
+            Ouvrir la première
+          </button>
           <button
             className="btn btn-secondary"
             style={{ fontSize: 12 }}
@@ -584,12 +765,12 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
         </div>
       )}
 
-      {showBatchValidation && lowConfidenceFactures.length > 0 && (
+      {showBatchValidation && reviewFactures.length > 0 && (
         <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 14 }}>
           <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", fontSize: 12.5, fontWeight: 500 }}>
-            Factures à confiance faible
+            Factures à revoir en priorité
           </div>
-          {lowConfidenceFactures.map(f => (
+          {reviewFactures.map((f) => (
             <div key={f.id}
               style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-1)", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
               onClick={() => setSelected(f)}
@@ -599,13 +780,23 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                 <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{f.num_facture} · {formatDate(f.date_facture)}</div>
               </div>
               <div className="mono tabular" style={{ fontSize: 13, fontWeight: 600 }}>{formatMAD(f.montant_ttc).split(",")[0]}</div>
-              <span style={{
-                fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 600,
-                background: "var(--warn-bg)", color: "var(--warn-ink)",
-                border: "1px solid color-mix(in srgb, var(--warn-ink) 20%, transparent)"
-              }}>
-                {Math.round((f.confidence || 0) * 100)}% confiance
-              </span>
+              {f.validation_status === "a_verifier" ? (
+                <span style={{
+                  fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 600,
+                  background: "var(--accent-bg)", color: "var(--accent-ink)",
+                  border: "1px solid color-mix(in srgb, var(--accent-ink) 20%, transparent)"
+                }}>
+                  À vérifier
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 600,
+                  background: "var(--warn-bg)", color: "var(--warn-ink)",
+                  border: "1px solid color-mix(in srgb, var(--warn-ink) 20%, transparent)"
+                }}>
+                  {Math.round((f.confidence || 0) * 100)}% confiance
+                </span>
+              )}
               <ChevronRight size={14} style={{ color: "var(--ink-3)" }} />
             </div>
           ))}
@@ -658,6 +849,9 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               </button>
               <button className={`chip${statutFilter === "a_valider" ? " active" : ""}`} onClick={() => setStatutFilter("a_valider")}>
                 <span className="chip-dot warn" />À valider
+              </button>
+              <button className={`chip${statutFilter === "a_verifier" ? " active" : ""}`} onClick={() => setStatutFilter("a_verifier")}>
+                <span className="chip-dot accent" />À revoir
               </button>
               <button className={`chip${statutFilter === "en_retard" ? " active" : ""}`} onClick={() => setStatutFilter("en_retard")}>
                 <span className="chip-dot neg" />En retard
@@ -743,14 +937,27 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       )}
 
       {showUpload && (
-        <OverlayPortal onClose={() => { setShowUpload(false); setUploadFiles([]); }}>
-          <div className="scrim" onClick={() => { setShowUpload(false); setUploadFiles([]); }} />
-          <div className="modal">
-            <div className="modal-head">
+        <Modal
+          open={showUpload}
+          onClose={() => { setShowUpload(false); setUploadFiles([]); }}
+          closeOnBackdrop={!uploading}
+          title="Importer des factures"
+          icon={<FileText size={16} />}
+          header={(
+            <>
               <FileText size={16} /><div style={{ fontWeight: 500, fontSize: 14 }}>Importer des factures</div>
-              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => { setShowUpload(false); setUploadFiles([]); }}><X size={15} /></button>
-            </div>
-            <div className="modal-body">
+              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => { setShowUpload(false); setUploadFiles([]); }} disabled={uploading}><X size={15} /></button>
+            </>
+          )}
+          footer={(
+            <>
+              <button className="btn btn-ghost" onClick={() => { setShowUpload(false); setUploadFiles([]); }} disabled={uploading}>Annuler</button>
+              <button className="btn btn-primary" disabled={!uploadFiles.length || uploading} onClick={handleUpload}>
+                {uploading ? <><span className="spinner" /> {uploadStage === "uploading" ? `Envoi ${uploadProgress}%` : "Analyse..."}</> : <><Sparkles size={13} /> Extraire · {uploadFiles.length} fichier{uploadFiles.length > 1 ? "s" : ""}</>}
+              </button>
+            </>
+          )}
+        >
               <div className={`dropzone${dragging ? " drag-over" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
                 <div className="dropzone-icon"><Upload size={20} /></div>
                 <div className="dropzone-title">Glissez vos factures ici</div>
@@ -770,22 +977,43 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               {uploadFiles.length > 0 && (
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
-                    <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{uploadFiles.length} fichier{uploadFiles.length > 1 ? "s" : ""} en attente</span>
-                    <button type="button" className="btn btn-ghost sm" onClick={() => fileRef.current?.click()}>
+                    <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                      {uploadFiles.length} fichier{uploadFiles.length > 1 ? "s" : ""} prêt{uploadFiles.length > 1 ? "s" : ""} · {formatFileSize(uploadTotalBytes)}
+                    </span>
+                    <button type="button" className="btn btn-ghost sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                       Ajouter
                     </button>
                   </div>
+                  {uploading && (
+                    <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-inset)", border: "1px solid var(--line-1)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          {uploadStage === "uploading" ? "Téléversement du lot..." : "Analyse des factures en cours..."}
+                        </div>
+                        <div className="mono tabular" style={{ fontSize: 12, color: "var(--ink-2)" }}>{uploadProgress}%</div>
+                      </div>
+                      <div className="progress" style={{ height: 6 }}>
+                        <div className="fill" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--ink-2)" }}>
+                        {uploadStage === "uploading"
+                          ? "Envoi des fichiers vers Findoc."
+                          : "Les fichiers sont reçus, l'extraction et les écritures continuent."}
+                      </div>
+                    </div>
+                  )}
                   {uploadFiles.map((file, index) => (
                     <div key={index} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "var(--bg-inset)", borderRadius: 8, fontSize: 12.5 }}>
                       <FileText size={13} style={{ color: "var(--accent-ink)" }} />
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
-                      <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>{(file.size / 1024).toFixed(0)} Ko</span>
+                      <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>{formatFileSize(file.size)}</span>
                       <button
                         type="button"
                         className="icon-btn"
                         title="Retirer"
                         onClick={() => setUploadFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
                         style={{ width: 26, height: 26 }}
+                        disabled={uploading}
                       >
                         <X size={12} />
                       </button>
@@ -793,32 +1021,38 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
                   ))}
                 </div>
               )}
-            </div>
-            <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={() => { setShowUpload(false); setUploadFiles([]); }}>Annuler</button>
-              <button className="btn btn-primary" disabled={!uploadFiles.length || uploading} onClick={handleUpload}>
-                {uploading ? <><span className="spinner" /> Traitement...</> : <><Sparkles size={13} /> Extraire · {uploadFiles.length} fichier{uploadFiles.length > 1 ? "s" : ""}</>}
-              </button>
-            </div>
-          </div>
-        </OverlayPortal>
+        </Modal>
       )}
 
-      <ExportDialog
-        open={showExport}
-        onClose={() => setShowExport(false)}
-        dossierId={dossierId}
-        factures={factures}
-        ecritures={ecritures}
-        tpeTransactions={tpeTransactions}
-        defaultJournal={tab}
-      />
+      {showExport && (
+        <ExportDialog
+          open={showExport}
+          onClose={() => setShowExport(false)}
+          dossierId={dossierId}
+          factures={factures}
+          ecritures={ecritures}
+          tpeTransactions={tpeTransactions}
+          defaultJournal={tab}
+        />
+      )}
 
       {selected && (
         <FactureDetail
           facture={selected}
           ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)}
           onClose={() => setSelected(null)}
+          reviewQueue={reviewFactures}
+          onSelectFacture={setSelected}
+          onAdvanceAfterDecision={(currentFacture) => {
+            const currentIndex = reviewFactures.findIndex((facture) => String(facture.id) === String(currentFacture.id));
+            const nextFacture = currentIndex >= 0 ? reviewFactures[currentIndex + 1] : null;
+            if (nextFacture) {
+              setSelected(nextFacture);
+              return;
+            }
+            setSelected(null);
+            toast("File de revue terminée pour ce lot.", "pos");
+          }}
           onUpdate={(next) => {
             setSelected(next);
             onRefresh();

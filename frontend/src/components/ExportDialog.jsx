@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
+import { useMemo, useState } from "react";
 import { Download, FileSpreadsheet, FileText, X } from "lucide-react";
 
-import OverlayPortal from "./OverlayPortal";
+import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
 import { formatDate, formatMAD } from "../utils/format";
 
@@ -188,15 +187,6 @@ export default function ExportDialog({
   const [year, setYear] = useState(availableYears[0] || "all");
   const [month, setMonth] = useState("all");
 
-  useEffect(() => {
-    if (open) {
-      setJournal(defaultJournal);
-      setFormat("excel");
-      setYear(availableYears[0] || "all");
-      setMonth("all");
-    }
-  }, [open, defaultJournal, availableYears]);
-
   const factureRows = useMemo(() => {
     if (journal !== "tpe") return buildFactureRows(factures, journal, year, month);
     return (tpeTransactions || [])
@@ -237,7 +227,7 @@ export default function ExportDialog({
 
   if (!open) return null;
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!rows.length) {
       toast("Aucune donnée à exporter pour cette sélection", "neg");
       return;
@@ -248,6 +238,7 @@ export default function ExportDialog({
     const baseName = `findoc_${journalLabel}_${periodLabel}_${dossierId || "demo"}`;
 
     if (format === "excel") {
+      const XLSX = await import("xlsx");
       const sheet = XLSX.utils.json_to_sheet(rows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, JOURNAL_OPTIONS.find((option) => option.key === journal)?.label || "Export");
@@ -282,15 +273,28 @@ export default function ExportDialog({
   };
 
   return (
-    <OverlayPortal onClose={onClose}>
-      <div className="scrim" onClick={onClose} />
-      <div className="modal">
-        <div className="modal-head">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Exporter les données"
+      icon={<Download size={16} />}
+      bodyClassName="export-dialog-body"
+      header={(
+        <>
           <Download size={16} />
           <div style={{ fontWeight: 500, fontSize: 14 }}>Exporter les données</div>
           <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
-        </div>
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        </>
+      )}
+      footer={(
+        <>
+          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={handleExport}>
+            <Download size={13} /> Exporter
+          </button>
+        </>
+      )}
+    >
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Format
@@ -383,14 +387,6 @@ export default function ExportDialog({
               </div>
             </div>
           </div>
-        </div>
-        <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" onClick={handleExport}>
-            <Download size={13} /> Exporter
-          </button>
-        </div>
-      </div>
-    </OverlayPortal>
+    </Modal>
   );
 }

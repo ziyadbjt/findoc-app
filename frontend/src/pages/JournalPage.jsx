@@ -378,14 +378,16 @@ function JournalTab({ ecritures, factures, dossierId }) {
         </table>
       </div>
 
-      <ExportDialog
-        open={showExport}
-        onClose={() => setShowExport(false)}
-        dossierId={dossierId}
-        factures={factures}
-        ecritures={ecritures}
-        defaultJournal="achats"
-      />
+      {showExport && (
+        <ExportDialog
+          open={showExport}
+          onClose={() => setShowExport(false)}
+          dossierId={dossierId}
+          factures={factures}
+          ecritures={ecritures}
+          defaultJournal="achats"
+        />
+      )}
     </div>
   );
 }

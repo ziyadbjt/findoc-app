@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, RefreshCw, Sparkles, Database, Building2, Upload, Plus, Trash2, Pencil, X, Search, Brain, CheckCircle, AlertCircle } from "lucide-react";
-import * as XLSX from "xlsx";
 import { useToast } from "../context/ToastContext";
 import { createAdminUser, getAdminUsers, getCorrections, getPCM, getRagStatus, replacePCM, updateAdminUser } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -146,7 +145,7 @@ function PCMSection({ toast, dossier }) {
     };
     load();
     return () => { ignore = true; };
-  }, [token, dossier?.id]);
+  }, [token, dossier?.id, toast]);
 
   const startNew = () => {
     setForm({ compte: "", libelle: "", classe: "4" });
@@ -188,10 +187,11 @@ function PCMSection({ toast, dossier }) {
     if (!file) return;
     const isExcel = /\.(xls|xlsx)$/i.test(file.name);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         let parsed;
         if (isExcel) {
+          const XLSX = await import("xlsx");
           const workbook = XLSX.read(ev.target.result, { type: "array" });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
@@ -306,7 +306,7 @@ function PCMSection({ toast, dossier }) {
             {filtered.length === 0 && (
               <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: "var(--ink-3)", fontSize: 13 }}>Aucun compte.</td></tr>
             )}
-            {filtered.map((c, i) => {
+            {filtered.map((c) => {
               const realIdx = comptes.indexOf(c);
               return (
                 <tr key={c.compte} className="tr-hover">
@@ -363,7 +363,7 @@ function AccessTab() {
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState({ nom: "", email: "", role: "collab", password: "" });
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!token || !isAdmin) return;
     setLoading(true);
     try {
@@ -374,9 +374,9 @@ function AccessTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, toast, token]);
 
-  useEffect(() => { loadUsers(); }, [token, isAdmin]);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const createUser = async () => {
     if (!draft.nom.trim() || !draft.email.trim()) {
@@ -525,7 +525,7 @@ function FinAITab({ dossier }) {
   const [ragStatus, setRagStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [statusRes, corrRes] = await Promise.all([
@@ -539,9 +539,9 @@ function FinAITab({ dossier }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dossier?.id, toast, token]);
 
-  useEffect(() => { load(); }, [dossier?.id]);
+  useEffect(() => { load(); }, [load]);
 
   const CHAMP_LABELS = { compte_pcm: "Compte PCM", fournisseur: "Fournisseur", code_tiers: "Code tiers", type: "Type" };
 
@@ -662,15 +662,18 @@ export default function SettingsPage({ dossier, onUpdateDossier }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setForm({
-      raison_sociale: dossier?.raison_sociale || "",
-      ice: dossier?.ice || "",
-      forme_juridique: dossier?.forme_juridique || "SARL",
-      ville: dossier?.ville || "",
-      secteur: dossier?.secteur || "",
-      regime_tva: dossier?.regime_tva || "debits",
-    });
-    setTvaConfig(readTVAConfig(dossier));
+    const syncState = window.setTimeout(() => {
+      setForm({
+        raison_sociale: dossier?.raison_sociale || "",
+        ice: dossier?.ice || "",
+        forme_juridique: dossier?.forme_juridique || "SARL",
+        ville: dossier?.ville || "",
+        secteur: dossier?.secteur || "",
+        regime_tva: dossier?.regime_tva || "debits",
+      });
+      setTvaConfig(readTVAConfig(dossier));
+    }, 0);
+    return () => window.clearTimeout(syncState);
   }, [dossier]);
 
   const handleSave = () => {

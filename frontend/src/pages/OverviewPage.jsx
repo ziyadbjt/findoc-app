@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
-import OverlayPortal from "../components/OverlayPortal";
+import Drawer from "../components/Drawer";
 import { formatMAD, formatDate } from "../utils/format";
 
 const DASHBOARD_WIDGETS = [
@@ -259,15 +259,19 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
       )}
 
       {showCustomize && (
-        <OverlayPortal onClose={() => setShowCustomize(false)}>
-          <div className="scrim" onClick={() => setShowCustomize(false)} />
-          <div className="drawer" style={{ width: 420 }}>
-            <div className="drawer-head">
+        <Drawer
+          open={showCustomize}
+          onClose={() => setShowCustomize(false)}
+          width={420}
+          bodyClassName="drawer-body-padded drawer-body-stack"
+          header={(
+            <>
               <Settings2 size={16} style={{ color: "var(--ink-1)" }} />
               <div style={{ fontWeight: 600, fontSize: 14 }}>Personnaliser le dashboard</div>
               <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setShowCustomize(false)}><X size={15} /></button>
-            </div>
-            <div className="drawer-body" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+            </>
+          )}
+        >
               {DASHBOARD_WIDGETS.map((widget) => (
                 <label key={widget.key} className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-start", background: "var(--bg-inset)" }}>
                   <input
@@ -282,9 +286,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
                   </div>
                 </label>
               ))}
-            </div>
-          </div>
-        </OverlayPortal>
+        </Drawer>
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>

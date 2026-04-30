@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import { Building2, Download, Search, Upload, User, Pencil, Check, X } from "lucide-react";
-import * as XLSX from "xlsx";
 
 import { formatDate, formatMAD } from "../utils/format";
 import { useCorrection } from "../hooks/useCorrection";
@@ -202,7 +201,7 @@ function TiersSection({ factures, tiersType, dossierId }) {
     localStorage.setItem(storageKey, JSON.stringify(rows));
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const rows = tiers.map((tier) => ({
       type: tiersType,
       nom: tier.nom,
@@ -237,6 +236,7 @@ function TiersSection({ factures, tiersType, dossierId }) {
     csvLink.click();
     URL.revokeObjectURL(csvUrl);
 
+    const XLSX = await import("xlsx");
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, tiersType === "fournisseurs" ? "Fournisseurs" : "Clients");
@@ -255,6 +255,7 @@ function TiersSection({ factures, tiersType, dossierId }) {
         const parsed = JSON.parse(text);
         rows = Array.isArray(parsed) ? parsed : [];
       } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        const XLSX = await import("xlsx");
         const buffer = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
