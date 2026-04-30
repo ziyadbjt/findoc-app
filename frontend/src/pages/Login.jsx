@@ -33,7 +33,6 @@ export default function Login() {
         <div className="login-brand">
           <BrandLogo className="login-brand__logo" surface="auth" theme={theme} />
         </div>
-        <button type="button" className="login-help">Besoin d'aide ?</button>
       </header>
 
       <main className="login-canvas">
@@ -76,7 +75,6 @@ export default function Login() {
                   placeholder="••••••••"
                 />
               </div>
-              <button type="button" className="login-link-btn">Mot de passe oublié ?</button>
             </div>
 
             {error ? <div className="login-error">{error}</div> : null}
@@ -86,25 +84,11 @@ export default function Login() {
               {!loading && <ArrowRight size={15} />}
             </button>
           </form>
-
-          <div className="login-divider">
-            <small>ou</small>
-          </div>
-
-          <div className="login-contact">
-            Pas encore de compte ? <button type="button">Contacter un conseiller</button>
-          </div>
         </section>
       </main>
 
       <footer className="login-footer">
         <BrandLogo className="login-footer__logo" surface="auth" theme={theme} />
-        <nav aria-label="Liens légaux">
-          <button type="button">Mentions légales</button>
-          <button type="button">Confidentialité</button>
-          <button type="button">CGU</button>
-          <button type="button">Contact</button>
-        </nav>
         <span>© 2026 FinDoc. Tous droits réservés.</span>
       </footer>
     </div>

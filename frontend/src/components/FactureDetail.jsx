@@ -227,10 +227,10 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
                 </Field>
                 <Field label="Statut">
                   <select className="invoice-input" value={localF.validation_status || "a_valider"} onChange={(event) => update("validation_status", event.target.value)}>
-                    <option value="a_valider">À valider</option>
-                    <option value="a_verifier">À vérifier</option>
-                    <option value="valide">Validée</option>
-                    <option value="exclue">Exclue</option>
+                    <option value="a_valider">À valider — en attente de revue</option>
+                    <option value="a_verifier">À vérifier — données IA incertaines</option>
+                    <option value="valide">Validée — prête pour l'export</option>
+                    <option value="exclue">Exclue — hors périmètre</option>
                   </select>
                 </Field>
               </div>

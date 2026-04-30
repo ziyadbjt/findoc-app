@@ -163,7 +163,7 @@ export function Topbar({ route, dossier, onOpenCmd, onOpenNotifs, onOpenChat, ha
         <label className="topnav-exercise">
           <span>Exercice</span>
           <select value={currentExercise || new Date().getFullYear()} onChange={(e) => onChangeExercise?.(Number(e.target.value))}>
-            {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() + 2 - i).map((year) => (
+            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
               <option key={year} value={year}>{year}</option>
             ))}
           </select>
@@ -192,20 +192,20 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   const inputRef = useRef(null);
 
   const items = useMemo(() => [
-    { group: "Navigation", label: "Apercu", icon: <Home size={14} />, action: () => onNavigate("overview"), kbd: "G O" },
+    { group: "Navigation", label: "Aperçu", icon: <Home size={14} />, action: () => onNavigate("overview"), kbd: "G O" },
     { group: "Navigation", label: "Factures", icon: <FileText size={14} />, action: () => onNavigate("factures"), kbd: "G F" },
     { group: "Navigation", label: "Relances", icon: <Mail size={14} />, action: () => onNavigate("relances"), kbd: "G R" },
     { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers"), kbd: "G T" },
-    { group: "Navigation", label: "Declaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva"), kbd: "G V" },
-    { group: "Navigation", label: "Tresorerie", icon: <Home size={14} />, action: () => onNavigate("treso"), kbd: "G C" },
-    { group: "Navigation", label: "Reconciliation", icon: <Building2 size={14} />, action: () => onNavigate("reconciliation"), kbd: "G B" },
+    { group: "Navigation", label: "Déclaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva"), kbd: "G V" },
+    { group: "Navigation", label: "Trésorerie", icon: <Home size={14} />, action: () => onNavigate("treso"), kbd: "G C" },
+    { group: "Navigation", label: "Réconciliation", icon: <Building2 size={14} />, action: () => onNavigate("reconciliation"), kbd: "G B" },
     { group: "Navigation", label: "Audit", icon: <ShieldCheck size={14} />, action: () => onNavigate("audit") },
     { group: "Actions", label: "Importer des factures", icon: <Plus size={14} />, action: onUpload, kbd: "U" },
     { group: "Actions", label: "Exporter journal SAGE", icon: <Download size={14} />, action: onExport, kbd: "E" },
-    { group: "Actions", label: "Generer une relance", icon: <Send size={14} />, action: () => onNavigate("relances") },
+    { group: "Actions", label: "Générer une relance", icon: <Send size={14} />, action: () => onNavigate("relances") },
     { group: "Aide", label: "Raccourcis clavier — Ctrl+K pour ouvrir", icon: <ShieldCheck size={14} />, action: () => {}, kbd: "?" },
     { group: "Aide", label: "G + lettre = navigation rapide", icon: <ShieldCheck size={14} />, action: () => {} },
-    { group: "Aide", label: "Echap = fermer la palette", icon: <ShieldCheck size={14} />, action: () => {} },
+    { group: "Aide", label: "Échap = fermer la palette", icon: <ShieldCheck size={14} />, action: () => {} },
   ], [onNavigate, onUpload, onExport]);
 
   const filtered = useMemo(() => {
@@ -345,7 +345,7 @@ export function TweaksPanel({ onClose, accent, setAccent, density, setDensity, t
   return (
     <div className="tweaks-panel">
       <div className="tweaks-head">
-        <h4>Preferences</h4>
+        <h4>Préférences</h4>
         <button className="icon-btn" onClick={onClose} style={{ width: 24, height: 24 }}><X size={13} /></button>
       </div>
       <div className="tweaks-body">
@@ -358,11 +358,11 @@ export function TweaksPanel({ onClose, accent, setAccent, density, setDensity, t
           </div>
         </div>
         <div className="tweak-row">
-          <div className="tlabel">Densite</div>
+          <div className="tlabel">Densité</div>
           <div className="segmented">
             {["compact", "balanced", "airy"].map((d) => (
               <button key={d} className={density === d ? "active" : ""} onClick={() => setDensity(d)}>
-                {d === "compact" ? "Compact" : d === "balanced" ? "Equilibre" : "Aere"}
+                {d === "compact" ? "Compact" : d === "balanced" ? "Équilibré" : "Aéré"}
               </button>
             ))}
           </div>

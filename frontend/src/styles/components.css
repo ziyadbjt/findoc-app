@@ -543,6 +543,11 @@
 }
 
 /* ── Brand mark (shared) ─────────────────────── */
+.admin-brand-logo {
+  height: 28px;
+  width: auto;
+}
+
 .brand-mark {
   width: 30px;
   height: 30px;

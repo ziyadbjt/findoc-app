@@ -167,8 +167,51 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
   }, [processed]);
 
   const totalAging = Object.values(aging).reduce((a, b) => a + b, 0) || 1;
-  const trendAchats = [120, 135, 118, 142, 167, 189, 203, 195, 178, 210, 232, 248];
-  const trendCash = [420, 445, 460, 510, 495, 540, 580, 620, 610, 695, 780, 847];
+
+  const totalVentes = useMemo(
+    () => factures.filter(f => f.type === "vente").reduce((s, f) => s + (f.montant_ttc || 0), 0),
+    [factures]
+  );
+
+  const trendAchats = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      return factures
+        .filter(f => {
+          const fd = new Date(f.date_facture || "");
+          return fd.getFullYear() === d.getFullYear() && fd.getMonth() === d.getMonth() && f.type !== "vente";
+        })
+        .reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    }),
+    [factures, now]
+  );
+
+  const trendVentes = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      return factures
+        .filter(f => {
+          const fd = new Date(f.date_facture || "");
+          return fd.getFullYear() === d.getFullYear() && fd.getMonth() === d.getMonth() && f.type === "vente";
+        })
+        .reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    }),
+    [factures, now]
+  );
+
+  const deltaAchats = useMemo(() => {
+    const ms90 = 90 * 86400000;
+    const curr = factures.filter(f => new Date(f.date_facture || "") >= new Date(now - ms90) && f.type !== "vente").reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    const prev = factures.filter(f => { const fd = new Date(f.date_facture || ""); return fd >= new Date(now - 2 * ms90) && fd < new Date(now - ms90) && f.type !== "vente"; }).reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
+  }, [factures, now]);
+
+  const deltaVentes = useMemo(() => {
+    const curr = factures.filter(f => { const fd = new Date(f.date_facture || ""); return fd.getFullYear() === now.getFullYear() && fd.getMonth() === now.getMonth() && f.type === "vente"; }).reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prev = factures.filter(f => { const fd = new Date(f.date_facture || ""); return fd.getFullYear() === prevD.getFullYear() && fd.getMonth() === prevD.getMonth() && f.type === "vente"; }).reduce((s, f) => s + (f.montant_ttc || 0), 0);
+    return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
+  }, [factures, now]);
 
   const activity = [
     { icon: "sparkles", color: "accent", title: "Extraction automatique terminée", sub: "98% de confiance moyenne sur les derniers lots", time: "Il y a 2 min" },
@@ -365,18 +408,20 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
             <div style={{ display: "grid", gap: 18 }}>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                  <span className="card-title" style={{ fontSize: 28 }}>Trésorerie pilotée</span>
-                  <span className="badge pos">+3.1%</span>
+                  <span className="card-title" style={{ fontSize: 28 }}>Ventes comptabilisées</span>
+                  {deltaVentes !== null && (
+                    <span className={`badge ${deltaVentes >= 0 ? "pos" : "neg"}`}>{deltaVentes >= 0 ? "+" : ""}{deltaVentes}% ce mois</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
-                  Solde BMCE estimé au fil des mouvements rapprochés.
+                  Chiffre d'affaires enregistré sur ce dossier.
                 </div>
                 <div className="kpi-value">
-                  <span className="tabular">847 230</span>
+                  <span className="tabular">{formatMAD(totalVentes).split(",")[0]}</span>
                   <span className="unit">MAD</span>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <MiniTrend data={trendCash} color="var(--pos)" />
+                  <MiniTrend data={trendVentes.some(v => v > 0) ? trendVentes : trendAchats} color="var(--pos)" />
                 </div>
               </div>
 
@@ -416,10 +461,12 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
                 <span className="unit">MAD</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span className="badge pos">+12.4%</span>
+                {deltaAchats !== null && (
+                  <span className={`badge ${deltaAchats >= 0 ? "pos" : "neg"}`}>{deltaAchats >= 0 ? "+" : ""}{deltaAchats}%</span>
+                )}
                 <span style={{ fontSize: 12, color: "var(--ink-2)" }}>sur 90 jours glissants</span>
               </div>
-              <MiniTrend data={trendAchats} color="var(--accent)" />
+              <MiniTrend data={trendAchats.some(v => v > 0) ? trendAchats : [1,1,1,1,1,1,1,1,1,1,1,1]} color="var(--accent)" />
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
@@ -475,8 +522,15 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
 
           <div style={{ display: "grid", gap: 12 }}>
             {topFournisseurs.length === 0 && (
-              <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "20px 0", textAlign: "center" }}>
-                Aucune donnée fournisseur pour le moment.
+              <div style={{ padding: "28px 16px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <Building2 size={22} style={{ color: "var(--ink-3)" }} />
+                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-2)" }}>Aucun fournisseur comptabilisé</div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Importez des factures pour voir la concentration par tiers.</div>
+                {onNavigate && (
+                  <button className="btn btn-secondary" style={{ marginTop: 4, fontSize: 12 }} onClick={() => onNavigate("factures")}>
+                    Importer des factures
+                  </button>
+                )}
               </div>
             )}
             {topFournisseurs.map(([name, amt], i) => (

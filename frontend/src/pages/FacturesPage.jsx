@@ -36,9 +36,9 @@ function formatFileSize(bytes) {
 
 function StatutBadge({ statut }) {
   const map = {
-    traite: { cls: "badge pos", label: "Traitee" },
-    "traité": { cls: "badge pos", label: "Traitee" },
-    a_valider: { cls: "badge warn", label: "A valider" },
+    traite: { cls: "badge pos", label: "Traitée" },
+    "traité": { cls: "badge pos", label: "Traitée" },
+    a_valider: { cls: "badge warn", label: "À valider" },
     extraction: { cls: "badge accent", label: "Extraction" },
     erreur: { cls: "badge neg", label: "Erreur" },
   };
@@ -49,8 +49,8 @@ function StatutBadge({ statut }) {
 
 function PaiementBadge({ paiement }) {
   const map = {
-    payee: { cls: "badge pos", label: "Payee" },
-    "payée": { cls: "badge pos", label: "Payee" },
+    payee: { cls: "badge pos", label: "Payée" },
+    "payée": { cls: "badge pos", label: "Payée" },
     en_attente: { cls: "badge", label: "En attente" },
     en_retard: { cls: "badge neg", label: "En retard" },
   };
@@ -231,9 +231,9 @@ function BanqueTab({ factures, dossierId }) {
           </div>
 
           {[
-            { label: "Rapprochees", val: matched, color: "var(--pos-ink)" },
+            { label: "Rapprochées", val: matched, color: "var(--pos-ink)" },
             { label: "En attente", val: pending, color: "var(--warn-ink)" },
-            { label: "Ignorees", val: ignoredCount, color: "var(--ink-3)" },
+            { label: "Ignorées", val: ignoredCount, color: "var(--ink-3)" },
           ].map((stat) => (
             <div key={stat.label} style={{ textAlign: "center", minWidth: 56 }}>
               <div style={{ fontSize: 20, fontWeight: 600, color: stat.color }}>{stat.val}</div>
@@ -260,7 +260,7 @@ function BanqueTab({ factures, dossierId }) {
       </div>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
-        {[["all", "Tout"], ["pending", `En attente (${pending})`], ["matched", `Rapprochees (${matched})`], ["ignored", "Ignorees"]].map(([key, label]) => (
+        {[["all", "Tout"], ["pending", `En attente (${pending})`], ["matched", `Rapprochées (${matched})`], ["ignored", "Ignorées"]].map(([key, label]) => (
           <button key={key} className={`chip${filter === key ? " active" : ""}`} onClick={() => setFilter(key)}>{label}</button>
         ))}
       </div>
