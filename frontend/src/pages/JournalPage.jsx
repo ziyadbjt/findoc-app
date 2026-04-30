@@ -179,7 +179,7 @@ function ExtractionsTab({ factures, dossierId, onRefresh }) {
       </div>
 
       {showUpload && (
-        <UploadZone dossierId={dossierId} onDone={() => { onRefresh?.(); setShowUpload(false); }} />
+        <UploadZone dossierId={dossierId} onDone={() => { onRefresh?.(); }} />
       )}
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
