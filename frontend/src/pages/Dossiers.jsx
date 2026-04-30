@@ -423,22 +423,13 @@ export default function Dossiers() {
   const [q, setQ] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
-  const [usingFallback, setUsingFallback] = useState(false);
-
   const load = useCallback(async () => {
     try {
       const res = await getDossiers(token);
       const data = res.data.map(enrichDossier);
-      if (data.length > 0) {
-        setDossiers(data);
-        setUsingFallback(false);
-      } else {
-        setDossiers([]);
-        setUsingFallback(false);
-      }
+      setDossiers(data);
     } catch {
       setDossiers([]);
-      setUsingFallback(true);
     }
   }, [token]);
   useEffect(() => {
@@ -501,19 +492,7 @@ export default function Dossiers() {
           </p>
         </div>
 
-        {usingFallback && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-            marginBottom: 16, borderRadius: 10, fontSize: 12.5,
-            background: "var(--warn-bg)", color: "var(--warn-ink)",
-            border: "1px solid color-mix(in srgb, var(--warn-ink) 20%, transparent)"
-          }}>
-            <AlertCircle size={14} />
-            <span>Connexion au serveur impossible — données de démonstration affichées.</span>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
+<div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
           <div className="filter-search" style={{ flex: 1, maxWidth: 420 }}>
             <Search size={14} />
             <input placeholder="Rechercher par raison sociale, ville, ICE…" value={q} onChange={e => setQ(e.target.value)} />
