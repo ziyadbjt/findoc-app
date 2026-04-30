@@ -18,11 +18,6 @@ const EMPTY_FORM = {
 
 const HUE_PALETTE = [220, 260, 160, 30, 340, 190, 85, 0];
 
-const FALLBACK_DOSSIERS = [
-  { id: 1, raison_sociale: "ZIYAD CORP", ice: "1928299939292", forme_juridique: "SARL", ville: "Casablanca", secteur: "Commerce", regime_tva: "debits", logo_hue: 28 },
-  { id: 2, raison_sociale: "ATLAS INDUSTRIES SA", ice: "002345678901234", forme_juridique: "SA", ville: "Casablanca", secteur: "Industrie", regime_tva: "debits", logo_hue: 200 },
-  { id: 3, raison_sociale: "CABINET CHAMI & ASSOCIES", ice: "002987654300001", forme_juridique: "SARL", ville: "Casablanca", secteur: "Expertise Comptable", regime_tva: "debits", logo_hue: 160 },
-];
 
 const FILE_TYPES = [
   { ext: "PDF", icon: <FileText size={18} />, color: "#e53e3e", accept: ".pdf" },
@@ -442,7 +437,7 @@ export default function Dossiers() {
         setUsingFallback(false);
       }
     } catch {
-      setDossiers(FALLBACK_DOSSIERS.map(enrichDossier));
+      setDossiers([]);
       setUsingFallback(true);
     }
   }, [token]);
