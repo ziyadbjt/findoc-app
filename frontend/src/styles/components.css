@@ -543,6 +543,11 @@
 }
 
 /* ── Brand mark (shared) ─────────────────────── */
+.admin-brand-logo {
+  height: 28px;
+  width: auto;
+}
+
 .brand-mark {
   width: 30px;
   height: 30px;
@@ -4429,4 +4434,92 @@
   [data-page-content-transition] {
     animation: none;
   }
+}
+
+/* ── XAI Panel ─────────────────────────────────────────── */
+.xai-conf {
+  margin-bottom: 12px;
+}
+.xai-conf__labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-2);
+  margin-bottom: 5px;
+}
+.xai-conf__track {
+  height: 4px;
+  background: var(--bg-inset);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.xai-conf__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.xai-comment {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in srgb, var(--accent-ink) 18%, transparent);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-1);
+}
+.xai-comment svg {
+  color: var(--accent-ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.xai-comment p {
+  margin: 0;
+}
+.xai-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.xai-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.xai-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 6px;
+  transition: color 0.15s;
+}
+.xai-toggle:hover {
+  color: var(--ink-0);
+}
+.xai-source {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  background: var(--bg-inset);
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0;
 }

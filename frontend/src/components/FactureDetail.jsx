@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 import { useCorrection } from "../hooks/useCorrection";
@@ -227,10 +227,10 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
                 </Field>
                 <Field label="Statut">
                   <select className="invoice-input" value={localF.validation_status || "a_valider"} onChange={(event) => update("validation_status", event.target.value)}>
-                    <option value="a_valider">À valider</option>
-                    <option value="a_verifier">À vérifier</option>
-                    <option value="valide">Validée</option>
-                    <option value="exclue">Exclue</option>
+                    <option value="a_valider">À valider — en attente de revue</option>
+                    <option value="a_verifier">À vérifier — données IA incertaines</option>
+                    <option value="valide">Validée — prête pour l'export</option>
+                    <option value="exclue">Exclue — hors périmètre</option>
                   </select>
                 </Field>
               </div>
@@ -266,6 +266,8 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
               </div>
             </section>
 
+            <XaiPanel facture={localF} />
+
             <details className="invoice-section invoice-details">
               <summary>
                 Détails avancés
@@ -291,6 +293,70 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
           </div>
         </aside>
     </Drawer>
+  );
+}
+
+function XaiPanel({ facture }) {
+  const [showSource, setShowSource] = useState(false);
+
+  const payload = useMemo(() => {
+    try { return JSON.parse(facture.ocr_payload || "{}"); } catch { return {}; }
+  }, [facture.ocr_payload]);
+
+  const confidence = Math.min(1, facture.confidence || 0);
+  const pct = Math.round(confidence * 100);
+  const risque = payload.niveau_risque;
+  const commentaire = facture.analyse_ai || payload.commentaire_analyse;
+  const texteSource = facture.texte_source;
+  const methode = confidence > 0.5 ? "Claude Vision" : "Lecture heuristique";
+
+  if (!commentaire && !texteSource && !risque) return null;
+
+  const confColor = pct > 94 ? "var(--pos-ink)" : pct > 80 ? "var(--warn-ink)" : "var(--neg-ink)";
+
+  return (
+    <section className="invoice-section">
+      <div className="invoice-section-head">
+        <h3>Analyse IA</h3>
+        {risque && (
+          <span className={`badge ${risque === "eleve" ? "neg" : risque === "moyen" ? "warn" : "pos"}`}>
+            {risque === "eleve" ? "Risque élevé" : risque === "moyen" ? "Risque moyen" : "Risque faible"}
+          </span>
+        )}
+      </div>
+
+      <div className="xai-conf">
+        <div className="xai-conf__labels">
+          <span>Confiance · {methode}</span>
+          <span className="mono" style={{ fontWeight: 600, color: confColor }}>{pct}%</span>
+        </div>
+        <div className="xai-conf__track">
+          <div className="xai-conf__fill" style={{ width: `${pct}%`, background: confColor }} />
+        </div>
+      </div>
+
+      {commentaire && (
+        <div className="xai-comment">
+          <Sparkles size={13} />
+          <p>{commentaire}</p>
+        </div>
+      )}
+
+      <div className="xai-meta">
+        <span><Database size={11} />{methode === "Claude Vision" ? "Extraction Claude Vision" : "Extraction heuristique"}</span>
+        <span><Database size={11} />Corrections passées disponibles via RAG</span>
+      </div>
+
+      {texteSource && (
+        <>
+          <button className="xai-toggle" onClick={() => setShowSource((s) => !s)}>
+            <ChevronDown size={13} style={{ transition: "transform 0.2s", transform: showSource ? "rotate(180deg)" : "none" }} />
+            {showSource ? "Masquer les indices lus" : "Voir les indices lus dans le document"}
+          </button>
+          {showSource && <pre className="xai-source">{texteSource.slice(0, 800)}</pre>}
+        </>
+      )}
+    </section>
   );
 }
 

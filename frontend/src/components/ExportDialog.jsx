@@ -2,12 +2,15 @@ import { useMemo, useState } from "react";
 import { Download, FileSpreadsheet, FileText, X } from "lucide-react";
 
 import Modal from "./Modal";
+import { exportDgiTva } from "../api";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { formatDate, formatMAD } from "../utils/format";
 
 const FORMAT_OPTIONS = [
   { key: "excel", label: "Excel", desc: "Classeur .xlsx pour partage et analyse." },
   { key: "sage", label: "SAGE 100", desc: "Fichier texte structure pour import comptable." },
+  { key: "dgi_tva", label: "DGI TVA", desc: "Déclaration TVA (collectée / déductible / solde)." },
   { key: "csv", label: "Autre (CSV)", desc: "Format tabulaire simple et universel." },
 ];
 
@@ -21,17 +24,17 @@ const JOURNAL_OPTIONS = [
 const MONTH_OPTIONS = [
   { key: "all", label: "Tous les mois" },
   { key: "01", label: "Janvier" },
-  { key: "02", label: "Fevrier" },
+  { key: "02", label: "Février" },
   { key: "03", label: "Mars" },
   { key: "04", label: "Avril" },
   { key: "05", label: "Mai" },
   { key: "06", label: "Juin" },
   { key: "07", label: "Juillet" },
-  { key: "08", label: "Aout" },
+  { key: "08", label: "Août" },
   { key: "09", label: "Septembre" },
   { key: "10", label: "Octobre" },
   { key: "11", label: "Novembre" },
-  { key: "12", label: "Decembre" },
+  { key: "12", label: "Décembre" },
 ];
 
 function downloadBlob(blob, filename) {
@@ -174,6 +177,7 @@ export default function ExportDialog({
   defaultJournal = "achats",
 }) {
   const toast = useToast();
+  const { token } = useAuth();
   const [format, setFormat] = useState("excel");
   const [journal, setJournal] = useState(defaultJournal);
   const availableYears = useMemo(() => {
@@ -228,14 +232,28 @@ export default function ExportDialog({
   if (!open) return null;
 
   const handleExport = async () => {
+    const journalLabel = JOURNAL_OPTIONS.find((option) => option.key === journal)?.label.toLowerCase() || journal;
+    const periodLabel = `${year === "all" ? "toutes-annees" : year}${month === "all" ? "" : `-${month}`}`;
+    const baseName = `findoc_${journalLabel}_${periodLabel}_${dossierId || "demo"}`;
+
+    if (format === "dgi_tva") {
+      try {
+        const mois = month === "all" ? 0 : parseInt(month, 10);
+        const annee = year === "all" ? 0 : parseInt(year, 10);
+        const res = await exportDgiTva(token, dossierId, mois, annee);
+        downloadBlob(new Blob([res.data], { type: "text/csv;charset=utf-8;" }), `declaration_tva_${dossierId || "demo"}_${periodLabel}.csv`);
+        toast("Déclaration TVA exportée", "pos");
+        onClose?.();
+      } catch {
+        toast("Erreur lors de l'export DGI TVA", "neg");
+      }
+      return;
+    }
+
     if (!rows.length) {
       toast("Aucune donnée à exporter pour cette sélection", "neg");
       return;
     }
-
-    const journalLabel = JOURNAL_OPTIONS.find((option) => option.key === journal)?.label.toLowerCase() || journal;
-    const periodLabel = `${year === "all" ? "toutes-annees" : year}${month === "all" ? "" : `-${month}`}`;
-    const baseName = `findoc_${journalLabel}_${periodLabel}_${dossierId || "demo"}`;
 
     if (format === "excel") {
       const XLSX = await import("xlsx");
@@ -299,7 +317,7 @@ export default function ExportDialog({
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Format
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
               {FORMAT_OPTIONS.map((option) => (
                 <button
                   key={option.key}
@@ -346,10 +364,10 @@ export default function ExportDialog({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Annee
+                Année
               </div>
               <select className="input" value={year} onChange={(event) => setYear(event.target.value)}>
-                <option value="all">Toutes les annees</option>
+                <option value="all">Toutes les années</option>
                 {availableYears.map((optionYear) => (
                   <option key={optionYear} value={optionYear}>{optionYear}</option>
                 ))}
@@ -374,7 +392,7 @@ export default function ExportDialog({
                 {rows.length} ligne{rows.length > 1 ? "s" : ""} · {FORMAT_OPTIONS.find((option) => option.key === format)?.label}
               </div>
               <div style={{ marginTop: 4, color: "var(--ink-2)" }}>
-                {year === "all" ? "Toutes les annees" : year}
+                {year === "all" ? "Toutes les années" : year}
                 {month === "all" ? " · Tous les mois" : ` · ${MONTH_OPTIONS.find((option) => option.key === month)?.label}`}
               </div>
             </div>

@@ -25,18 +25,18 @@ const ReconciliationPage = lazy(() => import("./ReconciliationPage"));
 const RapportMensuelPage = lazy(() => import("./RapportMensuelPage"));
 
 const CRUMBS = {
-  overview: ["Dossier", "Apercu"],
+  overview: ["Dossier", "Aperçu"],
   factures: ["Dossier", "Factures"],
-  delai_paiement: ["Dossier", "Delai de paiement"],
+  delai_paiement: ["Dossier", "Délais de paiement"],
   relances: ["Dossier", "Relances"],
   tiers: ["Dossier", "Tiers"],
   journal: ["Dossier", "Extraction"],
-  tva: ["Dossier", "Declaration TVA"],
+  tva: ["Dossier", "Déclaration TVA"],
   audit: ["Dossier", "Audit"],
   anomalies: ["Dossier", "Anomalies"],
-  treso: ["Dossier", "Tresorerie"],
+  treso: ["Dossier", "Trésorerie"],
   reconciliation: ["Dossier", "Réconciliation"],
-  parametres: ["Dossier", "Parametres"],
+  parametres: ["Dossier", "Paramètres"],
   rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
 };
 
@@ -348,7 +348,7 @@ export default function Dashboard() {
             }}
           >
             <RefreshCw size={14} />
-            <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
+            <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relâchez pour actualiser" : "Tirez pour actualiser"}</span>
           </div>
           <div key={route} className="page-transition" data-page-content-transition>
             {loadingData && (

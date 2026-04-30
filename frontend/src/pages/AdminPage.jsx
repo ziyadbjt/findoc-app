@@ -74,6 +74,7 @@ export default function AdminPage() {
   const { token, user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const theme = document.documentElement.getAttribute("data-theme") || "dark";
   const [users, setUsers] = useState([]);
   const [cabinetRows, setCabinetRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -271,7 +272,7 @@ export default function AdminPage() {
       <div style={{ minHeight: "100vh", background: "var(--bg-0)", color: "var(--ink-0)" }}>
         <header style={{ padding: "18px 32px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div className="brand-mark">F</div>
+            <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
             <span style={{ fontWeight: 600, fontSize: 14 }}>Administration</span>
           </div>
           <button className="icon-btn" onClick={() => { logout(); navigate("/login"); }} title="Deconnexion">↗</button>
@@ -294,7 +295,7 @@ export default function AdminPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-0)" }}>
       <header style={{ padding: "18px 32px", borderBottom: "1px solid var(--line-0)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-1)" }}>
-        <div className="brand-mark">F</div>
+        <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Administration cabinet</div>
           <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>Pilotage des dossiers, alertes et acces de l'organisation</div>
@@ -451,7 +452,7 @@ export default function AdminPage() {
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{formatMAD(row.tvaBalance)}</div>
                   </div>
                   <div style={{ padding: 10, borderRadius: 12, background: "var(--bg-inset)" }}>
-                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginBottom: 5 }}>A valider</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginBottom: 5 }}>À valider</div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{row.pendingCount}</div>
                   </div>
                   <div style={{ padding: 10, borderRadius: 12, background: "var(--bg-inset)" }}>
