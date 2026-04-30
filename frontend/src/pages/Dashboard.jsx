@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { Suspense, lazy, useState, useEffect, useCallback, useRef } from "react";
 import { RefreshCw } from "lucide-react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -8,20 +8,21 @@ import {
 } from "../api";
 import { enrichDossier, enrichFacture } from "../utils/format";
 import { Sidebar, Topbar, CmdK, NotificationsPanel } from "../components/Shell";
-import ChatBot from "../components/ChatBot";
-import OverviewPage from "./OverviewPage";
-import FacturesPage from "./FacturesPage";
-import DelaiPaiementPage from "./DelaiPaiementPage";
-import RelancesPage from "./RelancesPage";
-import JournalPage from "./JournalPage";
-import TiersPage from "./TiersPage";
-import SettingsPage from "./SettingsPage";
-import TVAPage from "./TVAPage";
-import AuditPage from "./AuditPage";
-import AnomaliesPage from "./AnomaliesPage";
-import TresoPage from "./TresoPage";
-import ReconciliationPage from "./ReconciliationPage";
-import RapportMensuelPage from "./RapportMensuelPage";
+
+const ChatBot = lazy(() => import("../components/ChatBot"));
+const OverviewPage = lazy(() => import("./OverviewPage"));
+const FacturesPage = lazy(() => import("./FacturesPage"));
+const DelaiPaiementPage = lazy(() => import("./DelaiPaiementPage"));
+const RelancesPage = lazy(() => import("./RelancesPage"));
+const JournalPage = lazy(() => import("./JournalPage"));
+const TiersPage = lazy(() => import("./TiersPage"));
+const SettingsPage = lazy(() => import("./SettingsPage"));
+const TVAPage = lazy(() => import("./TVAPage"));
+const AuditPage = lazy(() => import("./AuditPage"));
+const AnomaliesPage = lazy(() => import("./AnomaliesPage"));
+const TresoPage = lazy(() => import("./TresoPage"));
+const ReconciliationPage = lazy(() => import("./ReconciliationPage"));
+const RapportMensuelPage = lazy(() => import("./RapportMensuelPage"));
 
 const CRUMBS = {
   overview: ["Dossier", "Apercu"],
@@ -38,6 +39,16 @@ const CRUMBS = {
   parametres: ["Dossier", "Parametres"],
   rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
 };
+
+function PageFallback() {
+  return (
+    <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="skeleton" style={{ height: i === 1 ? 120 : 60, borderRadius: 12, width: i === 3 ? "60%" : "100%" }} />
+      ))}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { id } = useParams();
@@ -277,11 +288,23 @@ export default function Dashboard() {
     setDossier((prev) => prev ? enrichDossier({ ...prev, ...changes }) : prev);
   };
 
-  const crumbs = dossier
-    ? [dossier.raison_sociale, ...(CRUMBS[route] || ["Dossier"]).slice(1)]
-    : CRUMBS[route] || ["Dossier"];
-
   const pageProps = { dossierId: id, factures, ecritures, dossier, onRefresh: loadData, user, currentExercise };
+  const renderPage = () => {
+    if (route === "overview") return <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />;
+    if (route === "factures") return <FacturesPage {...pageProps} layout={layout} />;
+    if (route === "delai_paiement") return <DelaiPaiementPage factures={factures} />;
+    if (route === "relances") return <RelancesPage {...pageProps} />;
+    if (route === "tiers") return <TiersPage factures={factures} dossierId={id} />;
+    if (route === "journal") return <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />;
+    if (route === "tva") return <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />;
+    if (route === "audit") return <AuditPage dossier={dossier} user={user} />;
+    if (route === "anomalies") return <AnomaliesPage factures={factures} />;
+    if (route === "treso") return <TresoPage factures={factures} dossier={dossier} />;
+    if (route === "reconciliation") return <ReconciliationPage factures={factures} dossierId={id} />;
+    if (route === "parametres") return <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />;
+    if (route === "rapport_mensuel") return <RapportMensuelPage dossierId={id} dossier={dossier} />;
+    return null;
+  };
 
   return (
     <div className="app-shell" data-density={density}>
@@ -327,27 +350,15 @@ export default function Dashboard() {
             <RefreshCw size={14} />
             <span>{pullRefreshing ? "Actualisation..." : pullDistance >= 84 ? "Relacher pour actualiser" : "Tirer pour actualiser"}</span>
           </div>
-          <div key={route} className="page-transition">
+          <div key={route} className="page-transition" data-page-content-transition>
             {loadingData && (
-              <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="skeleton" style={{ height: i === 1 ? 120 : 60, borderRadius: 12, width: i === 3 ? "60%" : "100%" }} />
-                ))}
-              </div>
+              <PageFallback />
             )}
-            {!loadingData && route === "overview" && <OverviewPage {...pageProps} bankLines={[]} onNavigate={setRoute} />}
-            {!loadingData && route === "factures" && <FacturesPage {...pageProps} layout={layout} />}
-            {!loadingData && route === "delai_paiement" && <DelaiPaiementPage factures={factures} />}
-            {!loadingData && route === "relances" && <RelancesPage {...pageProps} />}
-            {!loadingData && route === "tiers" && <TiersPage factures={factures} dossierId={id} />}
-            {!loadingData && route === "journal" && <JournalPage ecritures={ecritures} factures={factures} dossierId={id} onRefresh={loadData} />}
-            {!loadingData && route === "tva" && <TVAPage factures={factures} dossier={dossier} currentExercise={currentExercise} />}
-            {!loadingData && route === "audit" && <AuditPage dossier={dossier} user={user} />}
-            {!loadingData && route === "anomalies" && <AnomaliesPage factures={factures} />}
-            {!loadingData && route === "treso" && <TresoPage factures={factures} dossier={dossier} />}
-            {!loadingData && route === "reconciliation" && <ReconciliationPage factures={factures} dossierId={id} />}
-            {!loadingData && route === "parametres" && <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />}
-            {!loadingData && route === "rapport_mensuel" && <RapportMensuelPage dossierId={id} dossier={dossier} />}
+            {!loadingData && (
+              <Suspense fallback={<PageFallback />}>
+                {renderPage()}
+              </Suspense>
+            )}
           </div>
         </main>
       </div>
@@ -366,12 +377,14 @@ export default function Dashboard() {
         notifications={MOCK_NOTIFICATIONS}
       />
 
-      <ChatBot
-        dossierId={id}
-        open={showChat}
-        onOpen={() => setShowChat(true)}
-        onClose={() => setShowChat(false)}
-      />
+      <Suspense fallback={null}>
+        <ChatBot
+          dossierId={id}
+          open={showChat}
+          onOpen={() => setShowChat(true)}
+          onClose={() => setShowChat(false)}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -39,6 +39,7 @@ class UploadFactureItem(BaseModel):
     statut: str
     source_ai: str | None = None
     confiance: float | None = None
+    validation_status: str | None = None
 
 
 class UploadFacturesResponse(BaseModel):
@@ -150,6 +151,7 @@ async def upload_factures(
                 "statut": "traite",
                 "source_ai": extracted.get("source_ai"),
                 "confiance": extracted.get("confidence"),
+                "validation_status": facture.validation_status,
             }
         )
 

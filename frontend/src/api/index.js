@@ -56,11 +56,12 @@ export const getFactureFile = (token, factureId) =>
     responseType: "blob",
   });
 
-export const uploadFactures = (token, dossierId, files) => {
+export const uploadFactures = (token, dossierId, files, options = {}) => {
   const form = new FormData();
   files.forEach((file) => form.append("files", file));
   return axios.post(`${BASE}/factures/${dossierId}/upload`, form, {
     headers: { Authorization: `Bearer ${token}` },
+    onUploadProgress: options.onUploadProgress,
   });
 };
 

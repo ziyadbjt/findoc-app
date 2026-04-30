@@ -5,6 +5,8 @@ import {
   Sparkles, AlertTriangle, Download, X, Plus, Send,
   Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
+import Drawer from "./Drawer";
+import Modal from "./Modal";
 
 export function DossierAvatar({ dossier, size = 28 }) {
   const hue = dossier?.hue ?? 28;
@@ -247,8 +249,13 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   let runIdx = -1;
 
   return (
-    <>
-      <div className="scrim" onClick={onClose} />
+    <Modal
+      open={open}
+      onClose={onClose}
+      className="cmdk-modal"
+      contentClassName="cmdk-modal-content"
+      bodyClassName="cmdk-body"
+    >
       <div className="cmdk">
         <div className="cmdk-input-wrap">
           <Search size={15} style={{ color: "var(--ink-2)" }} />
@@ -288,7 +295,7 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
           )}
         </div>
       </div>
-    </>
+    </Modal>
   );
 }
 
@@ -298,15 +305,19 @@ export function NotificationsPanel({ open, onClose, notifications }) {
   const colorFor = (k) => k === "ai" ? "accent" : k === "warn" ? "warn" : k === "reconcile" ? "info" : "pos";
 
   return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="drawer" style={{ width: 420 }}>
-        <div className="drawer-head">
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width={420}
+      bodyClassName="drawer-body-padded"
+      header={(
+        <>
           <Bell size={16} style={{ color: "var(--ink-1)" }} />
           <div style={{ fontWeight: 600, fontSize: 14 }}>Activite recente</div>
           <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
-        </div>
-        <div className="drawer-body" style={{ padding: 18 }}>
+        </>
+      )}
+    >
           {notifications.map((n) => (
             <div key={n.id} style={{ display: "grid", gridTemplateColumns: "30px 1fr", gap: 12, padding: "14px 0", borderBottom: "1px solid var(--line-1)" }}>
               <div style={{ width: 30, height: 30, borderRadius: 10, background: `var(--${colorFor(n.kind)}-bg)`, color: `var(--${colorFor(n.kind)}-ink)`, display: "grid", placeItems: "center" }}>
@@ -319,9 +330,7 @@ export function NotificationsPanel({ open, onClose, notifications }) {
               </div>
             </div>
           ))}
-        </div>
-      </div>
-    </>
+    </Drawer>
   );
 }
 

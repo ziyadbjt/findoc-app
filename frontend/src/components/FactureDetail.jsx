@@ -1,12 +1,20 @@
 import { useState, useEffect } from "react";
-import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, Upload, ChevronDown } from "lucide-react";
+import { X, FileText, Sparkles, AlertTriangle, Download, Check, Database, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatMAD, formatDate } from "../utils/format";
 import { useCorrection } from "../hooks/useCorrection";
 import { getFactureFile, updateFacture } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import Drawer from "./Drawer";
 
-export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId }) {
+function getDisplayedTvaRate(facture) {
+  const montantHt = Number(facture?.montant_ht) || 0;
+  const tva = Number(facture?.tva) || 0;
+  if (montantHt <= 0) return 20;
+  return Math.round((tva / montantHt) * 10000) / 100;
+}
+
+export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId, reviewQueue = [], onSelectFacture, onAdvanceAfterDecision }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
   const [editing, setEditing] = useState(null);
@@ -16,7 +24,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const { token } = useAuth();
   const toast = useToast();
 
-  useEffect(() => { setLocalF(facture); }, [facture?.id]);
+  useEffect(() => { setLocalF(facture); }, [facture]);
 
   useEffect(() => {
     let active = true;
@@ -44,23 +52,23 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
     };
   }, [facture?.id, token]);
 
-  if (!facture) return null;
-
-  const update = async (key, value) => {
+  const update = async (key, value, options = {}) => {
     const original = localF[key];
     const next = { ...localF, [key]: value };
-    if (key === "montant_ht" || key === "tva_taux") {
-      next.tva = +(next.montant_ht * next.tva_taux / 100).toFixed(2);
+    if (key === "montant_ht" || key === "tva") {
       next.montant_ttc = +(next.montant_ht + next.tva).toFixed(2);
     }
     setLocalF(next);
     setSaving(true);
     try {
-      const payload = key === "tva_taux" ? { montant_ht: next.montant_ht, tva: next.tva, montant_ttc: next.montant_ttc } : { [key]: value };
+      const payload = (key === "montant_ht" || key === "tva")
+        ? { montant_ht: next.montant_ht, tva: next.tva, montant_ttc: next.montant_ttc }
+        : { [key]: value };
       const response = await updateFacture(token, localF.id, payload);
       const saved = { ...next, ...response.data };
       setLocalF(saved);
       onUpdate?.(saved);
+      if (options.advanceReview) onAdvanceAfterDecision?.(saved);
     } catch {
       setLocalF(localF);
       toast("Correction non sauvegardée", "neg");
@@ -86,11 +94,56 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const hasAccountingAlert =
     localF.traitement_comptable &&
     localF.traitement_comptable !== "exercice_courant";
+  const currentReviewIndex = reviewQueue.findIndex((item) => String(item.id) === String(localF.id));
+  const hasReviewQueue = currentReviewIndex >= 0 && reviewQueue.length > 1;
+  const previousReviewFacture = hasReviewQueue ? reviewQueue[currentReviewIndex - 1] : null;
+  const nextReviewFacture = hasReviewQueue ? reviewQueue[currentReviewIndex + 1] : null;
+
+  useEffect(() => {
+    if (!facture || !hasReviewQueue) return undefined;
+
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLElement &&
+        (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable
+        );
+      if (isEditableTarget) return;
+
+      if (event.key === "ArrowLeft" && previousReviewFacture) {
+        event.preventDefault();
+        onSelectFacture?.(previousReviewFacture);
+      }
+      if (event.key === "ArrowRight" && nextReviewFacture) {
+        event.preventDefault();
+        onSelectFacture?.(nextReviewFacture);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [facture, hasReviewQueue, nextReviewFacture, onSelectFacture, previousReviewFacture]);
+
+  const handleDecision = (status) => {
+    update("validation_status", status, { advanceReview: true });
+  };
+
+  if (!facture) return null;
 
   return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="drawer invoice-review-drawer">
+    <Drawer
+      key={localF.id}
+      open={!!facture}
+      onClose={onClose}
+      placement="center"
+      className="invoice-review-drawer"
+      closeOnBackdrop
+      bodyClassName="invoice-review-drawer-body"
+    >
         <section className="invoice-review-viewer">
           <div className="invoice-review-toolbar">
             <button className="invoice-icon-btn" onClick={onClose} title="Fermer"><X size={16} /></button>
@@ -111,6 +164,27 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
             <div>
               <h2>{localF.fournisseur || "Fournisseur à confirmer"}</h2>
               <div className="invoice-summary-meta">{localF.num_facture || "Sans numéro"} · {formatDate(localF.date_facture)}</div>
+              {hasReviewQueue && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                  <button
+                    className="btn btn-ghost sm"
+                    onClick={() => previousReviewFacture && onSelectFacture?.(previousReviewFacture)}
+                    disabled={!previousReviewFacture}
+                  >
+                    <ChevronLeft size={13} /> Précédente
+                  </button>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>
+                    {currentReviewIndex + 1} / {reviewQueue.length}
+                  </span>
+                  <button
+                    className="btn btn-ghost sm"
+                    onClick={() => nextReviewFacture && onSelectFacture?.(nextReviewFacture)}
+                    disabled={!nextReviewFacture}
+                  >
+                    Suivante <ChevronRight size={13} />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="invoice-summary-amount">
               <strong>{formatMAD(localF.montant_ttc)} MAD</strong>
@@ -208,16 +282,15 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
           </div>
 
           <div className="invoice-actionbar">
-            <button className="invoice-secondary-btn" onClick={() => update("validation_status", "a_verifier")} disabled={saving}>
+            <button className="invoice-secondary-btn" onClick={() => handleDecision("a_verifier")} disabled={saving}>
               À vérifier
             </button>
-            <button className="invoice-primary-btn" onClick={() => update("validation_status", "valide")} disabled={saving}>
+            <button className="invoice-primary-btn" onClick={() => handleDecision("valide")} disabled={saving}>
               <Check size={16} /> {saving ? "Sauvegarde..." : "Valider facture"}
             </button>
           </div>
         </aside>
-      </div>
-    </>
+    </Drawer>
   );
 }
 
@@ -327,7 +400,7 @@ function PdfMock({ f, activeField, boxes }) {
             <span>Total HT</span><span>{(f.montant_ht || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", color: "#555" }}>
-            <span>TVA {f.tva_taux || 20}%</span><span>{(f.tva || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
+            <span>TVA {getDisplayedTvaRate(f)}%</span><span>{(f.tva || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
           </div>
           <div style={{ borderTop: "1.5px solid #222", marginTop: 4, paddingTop: 6, display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13 }}>
             <span>Total TTC</span><span>{(f.montant_ttc || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MAD</span>
@@ -348,7 +421,7 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
     { key: "date_facture",  label: "Date facture",  value: formatDate(f.date_facture),             conf: f.confidence + 0.01, editable: false },
     { key: "date_echeance", label: "Échéance",      value: formatDate(f.date_echeance),            conf: f.confidence,        editable: false },
     { key: "montant_ht",    label: "Montant HT",    value: formatMAD(f.montant_ht) + " MAD",       conf: f.confidence + 0.02, editable: true, mono: true, raw: f.montant_ht },
-    { key: "tva_taux",      label: "Taux TVA",      value: (f.tva_taux || 20) + "%",              conf: 1.0,                 editable: true, mono: true, raw: f.tva_taux },
+    { key: "tva_taux",      label: "Taux TVA",      value: getDisplayedTvaRate(f) + "%",          conf: 1.0,                 editable: false, mono: true },
     { key: "tva",           label: "Montant TVA",   value: formatMAD(f.tva) + " MAD",              conf: f.confidence + 0.02, editable: false, mono: true },
     { key: "montant_ttc",   label: "Montant TTC",   value: formatMAD(f.montant_ttc) + " MAD",      conf: f.confidence + 0.03, editable: false, mono: true, strong: true },
     { key: "compte_pcm",    label: "Compte PCM",    value: f.compte_pcm,                           conf: Math.max(0.75, f.confidence - 0.1), editable: true, mono: true },
@@ -374,7 +447,7 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
                 defaultValue={r.raw ?? r.value}
                 onBlur={e => {
                   let v = e.target.value;
-                  if (r.key === "montant_ht" || r.key === "tva_taux") v = parseFloat(v) || 0;
+                  if (r.key === "montant_ht" || r.key === "tva") v = parseFloat(v) || 0;
                   if (r.key === "exercice_rattachement") v = parseInt(v, 10) || null;
                   onUpdate(r.key, v);
                   setEditing(null);
