@@ -7,6 +7,13 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import Drawer from "./Drawer";
 
+function getDisplayedTvaRate(facture) {
+  const montantHt = Number(facture?.montant_ht) || 0;
+  const tva = Number(facture?.tva) || 0;
+  if (montantHt <= 0) return 20;
+  return Math.round((tva / montantHt) * 10000) / 100;
+}
+
 export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId, reviewQueue = [], onSelectFacture, onAdvanceAfterDecision }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
@@ -48,14 +55,15 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const update = async (key, value, options = {}) => {
     const original = localF[key];
     const next = { ...localF, [key]: value };
-    if (key === "montant_ht" || key === "tva_taux") {
-      next.tva = +(next.montant_ht * next.tva_taux / 100).toFixed(2);
+    if (key === "montant_ht" || key === "tva") {
       next.montant_ttc = +(next.montant_ht + next.tva).toFixed(2);
     }
     setLocalF(next);
     setSaving(true);
     try {
-      const payload = key === "tva_taux" ? { montant_ht: next.montant_ht, tva: next.tva, montant_ttc: next.montant_ttc } : { [key]: value };
+      const payload = (key === "montant_ht" || key === "tva")
+        ? { montant_ht: next.montant_ht, tva: next.tva, montant_ttc: next.montant_ttc }
+        : { [key]: value };
       const response = await updateFacture(token, localF.id, payload);
       const saved = { ...next, ...response.data };
       setLocalF(saved);
@@ -128,6 +136,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
 
   return (
     <Drawer
+      key={localF.id}
       open={!!facture}
       onClose={onClose}
       placement="center"
@@ -391,7 +400,7 @@ function PdfMock({ f, activeField, boxes }) {
             <span>Total HT</span><span>{(f.montant_ht || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", color: "#555" }}>
-            <span>TVA {f.tva_taux || 20}%</span><span>{(f.tva || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
+            <span>TVA {getDisplayedTvaRate(f)}%</span><span>{(f.tva || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</span>
           </div>
           <div style={{ borderTop: "1.5px solid #222", marginTop: 4, paddingTop: 6, display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13 }}>
             <span>Total TTC</span><span>{(f.montant_ttc || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MAD</span>
@@ -412,7 +421,7 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
     { key: "date_facture",  label: "Date facture",  value: formatDate(f.date_facture),             conf: f.confidence + 0.01, editable: false },
     { key: "date_echeance", label: "Échéance",      value: formatDate(f.date_echeance),            conf: f.confidence,        editable: false },
     { key: "montant_ht",    label: "Montant HT",    value: formatMAD(f.montant_ht) + " MAD",       conf: f.confidence + 0.02, editable: true, mono: true, raw: f.montant_ht },
-    { key: "tva_taux",      label: "Taux TVA",      value: (f.tva_taux || 20) + "%",              conf: 1.0,                 editable: true, mono: true, raw: f.tva_taux },
+    { key: "tva_taux",      label: "Taux TVA",      value: getDisplayedTvaRate(f) + "%",          conf: 1.0,                 editable: false, mono: true },
     { key: "tva",           label: "Montant TVA",   value: formatMAD(f.tva) + " MAD",              conf: f.confidence + 0.02, editable: false, mono: true },
     { key: "montant_ttc",   label: "Montant TTC",   value: formatMAD(f.montant_ttc) + " MAD",      conf: f.confidence + 0.03, editable: false, mono: true, strong: true },
     { key: "compte_pcm",    label: "Compte PCM",    value: f.compte_pcm,                           conf: Math.max(0.75, f.confidence - 0.1), editable: true, mono: true },
@@ -438,7 +447,7 @@ function FieldsTable({ f, onFocus, editing, setEditing, onUpdate }) {
                 defaultValue={r.raw ?? r.value}
                 onBlur={e => {
                   let v = e.target.value;
-                  if (r.key === "montant_ht" || r.key === "tva_taux") v = parseFloat(v) || 0;
+                  if (r.key === "montant_ht" || r.key === "tva") v = parseFloat(v) || 0;
                   if (r.key === "exercice_rattachement") v = parseInt(v, 10) || null;
                   onUpdate(r.key, v);
                   setEditing(null);

@@ -22,6 +22,14 @@ function StatusIcon({ statut }) {
   return <Clock size={13} style={{ color: "var(--warn-ink)" }} />;
 }
 
+function SortHeaderCell({ col, right = false, sortCol, sortDir, onSort, children }) {
+  return (
+    <th className={`th${right ? " right" : ""}`} onClick={() => onSort(col)} style={{ cursor: "pointer", userSelect: "none" }}>
+      {children}{sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+    </th>
+  );
+}
+
 function UploadZone({ dossierId, onDone }) {
   const { token } = useAuth();
   const toast = useToast();
@@ -36,9 +44,9 @@ function UploadZone({ dossierId, onDone }) {
     setResults([]);
     try {
       const res = await uploadFactures(token, dossierId, Array.from(files));
-      const data = res.data?.factures || res.data || [];
+      const data = res.data?.resultats || [];
       setResults(Array.isArray(data) ? data : []);
-      toast(`${Array.isArray(data) ? data.length : 1} facture(s) extraite(s)`, "pos");
+      toast(`${Array.isArray(data) ? data.length : 0} facture(s) extraite(s)`, "pos");
       onDone?.();
     } catch {
       toast("Erreur lors de l'extraction", "neg");
@@ -70,7 +78,7 @@ function UploadZone({ dossierId, onDone }) {
           transition: "all 0.15s",
         }}
       >
-        <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.xml" multiple hidden
+        <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden
           onChange={(e) => process(e.target.files)} />
         <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--accent-bg)", color: "var(--accent-ink)", display: "grid", placeItems: "center", margin: "0 auto 14px" }}>
           {uploading ? <Sparkles size={22} /> : <Upload size={22} />}
@@ -78,7 +86,7 @@ function UploadZone({ dossierId, onDone }) {
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
           {uploading ? "Extraction en cours..." : "Déposer vos factures ici"}
         </div>
-        <div style={{ fontSize: 12, color: "var(--ink-3)" }}>PDF, JPG, PNG, XML · Cliquer pour parcourir</div>
+        <div style={{ fontSize: 12, color: "var(--ink-3)" }}>PDF, JPG, PNG · Cliquer pour parcourir</div>
       </div>
 
       {results.length > 0 && (
@@ -299,12 +307,6 @@ function JournalTab({ ecritures, factures, dossierId }) {
     else { setSortCol(col); setSortDir("asc"); }
   };
 
-  const Th = ({ col, children, right }) => (
-    <th className={`th${right ? " right" : ""}`} onClick={() => sort(col)} style={{ cursor: "pointer", userSelect: "none" }}>
-      {children}{sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-    </th>
-  );
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="filter-bar">
@@ -333,13 +335,13 @@ function JournalTab({ ecritures, factures, dossierId }) {
         <table className="table journal-table">
           <thead>
             <tr>
-              <Th col="date">Date</Th>
-              <Th col="journal">Journal</Th>
-              <Th col="compte">Compte PCM</Th>
-              <Th col="tiers">Tiers</Th>
-              <Th col="libelle">Libellé</Th>
-              <Th col="debit" right>Débit</Th>
-              <Th col="credit" right>Crédit</Th>
+              <SortHeaderCell col="date" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Date</SortHeaderCell>
+              <SortHeaderCell col="journal" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Journal</SortHeaderCell>
+              <SortHeaderCell col="compte" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Compte PCM</SortHeaderCell>
+              <SortHeaderCell col="tiers" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Tiers</SortHeaderCell>
+              <SortHeaderCell col="libelle" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Libellé</SortHeaderCell>
+              <SortHeaderCell col="debit" right sortCol={sortCol} sortDir={sortDir} onSort={sort}>Débit</SortHeaderCell>
+              <SortHeaderCell col="credit" right sortCol={sortCol} sortDir={sortDir} onSort={sort}>Crédit</SortHeaderCell>
             </tr>
           </thead>
           <tbody>
