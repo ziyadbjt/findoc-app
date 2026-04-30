@@ -5,6 +5,7 @@ import { useCorrection } from "../hooks/useCorrection";
 import { getFactureFile, updateFacture } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import OverlayPortal from "./OverlayPortal";
 
 export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId }) {
   const [activeField, setActiveField] = useState(null);
@@ -88,7 +89,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
     localF.traitement_comptable !== "exercice_courant";
 
   return (
-    <>
+    <OverlayPortal onClose={onClose}>
       <div className="scrim" onClick={onClose} />
       <div className="drawer invoice-review-drawer">
         <section className="invoice-review-viewer">
@@ -217,7 +218,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
           </div>
         </aside>
       </div>
-    </>
+    </OverlayPortal>
   );
 }
 

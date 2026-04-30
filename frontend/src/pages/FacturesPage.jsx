@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
 import { uploadBankStatement, uploadFactures } from "../api";
 import ExportDialog from "../components/ExportDialog";
 import FactureDetail from "../components/FactureDetail";
+import OverlayPortal from "../components/OverlayPortal";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { formatMAD, formatDate, formatDateShort } from "../utils/format";
@@ -19,11 +19,6 @@ const TABS = [
 ];
 
 const buildTpeStorageKey = (dossierId) => `tpe-transactions:${dossierId || "demo"}`;
-
-function ModalPortal({ children }) {
-  if (typeof document === "undefined") return null;
-  return createPortal(children, document.body);
-}
 
 
 function StatutBadge({ statut }) {
@@ -748,7 +743,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       )}
 
       {showUpload && (
-        <ModalPortal>
+        <OverlayPortal onClose={() => { setShowUpload(false); setUploadFiles([]); }}>
           <div className="scrim" onClick={() => { setShowUpload(false); setUploadFiles([]); }} />
           <div className="modal">
             <div className="modal-head">
@@ -806,7 +801,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               </button>
             </div>
           </div>
-        </ModalPortal>
+        </OverlayPortal>
       )}
 
       <ExportDialog

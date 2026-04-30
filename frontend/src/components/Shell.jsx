@@ -5,6 +5,7 @@ import {
   Sparkles, AlertTriangle, Download, X, Plus, Send,
   Receipt, ShieldCheck, MessageSquare, TrendingUp,
 } from "lucide-react";
+import OverlayPortal from "./OverlayPortal";
 
 export function DossierAvatar({ dossier, size = 28 }) {
   const hue = dossier?.hue ?? 28;
@@ -247,7 +248,7 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
   let runIdx = -1;
 
   return (
-    <>
+    <OverlayPortal onClose={onClose}>
       <div className="scrim" onClick={onClose} />
       <div className="cmdk">
         <div className="cmdk-input-wrap">
@@ -288,7 +289,7 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
           )}
         </div>
       </div>
-    </>
+    </OverlayPortal>
   );
 }
 
@@ -298,7 +299,7 @@ export function NotificationsPanel({ open, onClose, notifications }) {
   const colorFor = (k) => k === "ai" ? "accent" : k === "warn" ? "warn" : k === "reconcile" ? "info" : "pos";
 
   return (
-    <>
+    <OverlayPortal onClose={onClose}>
       <div className="scrim" onClick={onClose} />
       <div className="drawer" style={{ width: 420 }}>
         <div className="drawer-head">
@@ -321,7 +322,7 @@ export function NotificationsPanel({ open, onClose, notifications }) {
           ))}
         </div>
       </div>
-    </>
+    </OverlayPortal>
   );
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
+import OverlayPortal from "../components/OverlayPortal";
 import { formatMAD, formatDate } from "../utils/format";
 
 const DASHBOARD_WIDGETS = [
@@ -258,7 +259,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
       )}
 
       {showCustomize && (
-        <>
+        <OverlayPortal onClose={() => setShowCustomize(false)}>
           <div className="scrim" onClick={() => setShowCustomize(false)} />
           <div className="drawer" style={{ width: 420 }}>
             <div className="drawer-head">
@@ -283,7 +284,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
               ))}
             </div>
           </div>
-        </>
+        </OverlayPortal>
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>

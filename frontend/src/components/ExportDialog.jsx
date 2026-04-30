@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { Download, FileSpreadsheet, FileText, X } from "lucide-react";
 
+import OverlayPortal from "./OverlayPortal";
 import { useToast } from "../context/ToastContext";
 import { formatDate, formatMAD } from "../utils/format";
 
@@ -236,7 +236,6 @@ export default function ExportDialog({
   const rows = format === "sage" ? sageRows : factureRows;
 
   if (!open) return null;
-  if (typeof document === "undefined") return null;
 
   const handleExport = () => {
     if (!rows.length) {
@@ -282,8 +281,8 @@ export default function ExportDialog({
     onClose?.();
   };
 
-  return createPortal(
-    <>
+  return (
+    <OverlayPortal onClose={onClose}>
       <div className="scrim" onClick={onClose} />
       <div className="modal">
         <div className="modal-head">
@@ -392,7 +391,6 @@ export default function ExportDialog({
           </button>
         </div>
       </div>
-    </>,
-    document.body
+    </OverlayPortal>
   );
 }
