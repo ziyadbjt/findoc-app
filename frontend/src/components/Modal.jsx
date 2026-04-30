@@ -31,7 +31,7 @@ export default function Modal({
           role="dialog"
           aria-modal="true"
           aria-label={typeof title === "string" ? title : undefined}
-          className={`overlay-panel modal-shell modal-shell--${size} ${className}`.trim()}
+          className={`overlay-panel modal modal-shell modal-shell--${size} ${className}`.trim()}
           onClick={(event) => event.stopPropagation()}
           {...props}
         >
