@@ -3725,7 +3725,6 @@
 
 .topnav,
 .card,
-.modal,
 .login-panel {
   position: relative;
   overflow: hidden;
@@ -3820,6 +3819,23 @@
 .modal,
 .drawer {
   animation: glass-rise 220ms cubic-bezier(.2, .8, .2, 1);
+}
+
+/* Keep dialogs centered in the viewport.
+   A later glass rule sets `position: relative` for surfaced components,
+   which breaks import/export modals if we do not explicitly restore fixed positioning. */
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 760px);
+}
+
+.modal-body {
+  overflow-y: auto;
 }
 
 @keyframes glass-rise {
