@@ -103,15 +103,13 @@ describe("overlay UI system", () => {
 
     await user.click(screen.getByRole("button", { name: /Annuler/i }));
 
-    await user.click(screen.getByText("Acme SARL"));
+    await user.click(screen.getAllByText("Acme SARL")[0]);
     expect(await screen.findByText(/Valider facture/i)).toBeTruthy();
     expect(document.querySelector('[data-ui-overlay="drawer"]')).toBeTruthy();
     expect(screen.getByText("1 / 2")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /Valider facture/i }));
     expect(await screen.findByRole("heading", { name: "Beta Industrie" })).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: /Suivante/i }));
     expect(screen.getByText("2 / 2")).toBeTruthy();
   });
 

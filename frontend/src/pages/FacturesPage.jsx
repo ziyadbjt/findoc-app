@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, CircleCheckBig, Clock3, Download, FileText, FolderClock, Receipt, RefreshCw, Search, Sparkles, Upload, Wallet, X } from "lucide-react";
 
 import { uploadBankStatement, uploadFactures } from "../api";
 import Modal from "../components/Modal";
@@ -63,6 +63,85 @@ function AmountDiff({ a, b }) {
   const diff = Math.abs(a - b);
   if (diff < 1) return <span style={{ color: "var(--pos-ink)", fontSize: 11 }}>exact</span>;
   return <span style={{ color: "var(--warn-ink)", fontSize: 11 }}>Delta {formatMAD(diff).split(",")[0]}</span>;
+}
+
+function SortHeaderCell({ col, right = false, sortCol, sortDir, onSort, children }) {
+  return (
+    <th className={`th${right ? " right" : ""}`} onClick={() => onSort(col)} style={{ cursor: "pointer", userSelect: "none" }}>
+      {children}
+      {sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+    </th>
+  );
+}
+
+function getFacturePriority(facture) {
+  if (facture?.statut === "erreur") return "error";
+  if (facture?.validation_status === "a_verifier") return "review";
+  if (facture?.confidence != null && facture.confidence < 0.8) return "warning";
+  if (facture?.paiement === "en_retard") return "overdue";
+  if (facture?.paiement === "en_attente") return "pending";
+  return "ok";
+}
+
+function getFacturePriorityMeta(facture) {
+  const priority = getFacturePriority(facture);
+  if (priority === "error") return { label: "Erreur", tone: "neg", icon: <AlertTriangle size={12} /> };
+  if (priority === "review") return { label: "À vérifier", tone: "accent", icon: <Sparkles size={12} /> };
+  if (priority === "warning") return { label: "Confiance faible", tone: "warn", icon: <Sparkles size={12} /> };
+  if (priority === "overdue") return { label: "En retard", tone: "neg", icon: <Clock3 size={12} /> };
+  if (priority === "pending") return { label: "En attente", tone: "warn", icon: <FolderClock size={12} /> };
+  return { label: "Prête", tone: "pos", icon: <CircleCheckBig size={12} /> };
+}
+
+function FactureListCard({ facture, active, onOpen }) {
+  const priority = getFacturePriorityMeta(facture);
+  const confidence = facture?.confidence != null ? Math.round(facture.confidence * 100) : null;
+
+  return (
+    <button
+      type="button"
+      className={`facture-list-card${active ? " active" : ""}`}
+      onClick={() => onOpen(facture)}
+    >
+      <div className="facture-list-card__top">
+        <div>
+          <div className="facture-list-card__title">{facture.fournisseur || "Fournisseur à confirmer"}</div>
+          <div className="facture-list-card__meta">
+            <span className="mono">{facture.num_facture || "Sans numéro"}</span>
+            <span>{formatDateShort(facture.date_facture)}</span>
+            <span>{facture.code_tiers || facture.categorie || "Sans code tiers"}</span>
+          </div>
+        </div>
+        <div className="facture-list-card__amount">
+          {formatMAD(facture.montant_ttc || 0).split(",")[0]}
+          <span>MAD</span>
+        </div>
+      </div>
+
+      <div className="facture-list-card__middle">
+        <span className={`facture-priority-chip ${priority.tone}`}>
+          {priority.icon}
+          {priority.label}
+        </span>
+        <StatutBadge statut={facture.statut} />
+        <PaiementBadge paiement={facture.paiement} />
+        {confidence != null && (
+          <span className="facture-confidence">IA {confidence}%</span>
+        )}
+      </div>
+
+      <div className="facture-list-card__bottom">
+        <div className="facture-list-card__dates">
+          <span>Échéance {formatDateShort(facture.date_echeance)}</span>
+          <span>HT {formatMAD(facture.montant_ht || 0).split(",")[0]}</span>
+        </div>
+        <span className="facture-list-card__cta">
+          Ouvrir
+          <ChevronRight size={14} />
+        </span>
+      </div>
+    </button>
+  );
 }
 
 
@@ -535,13 +614,6 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     }
   };
 
-  const Th = ({ col, children, right }) => (
-    <th className={`th${right ? " right" : ""}`} onClick={() => sort(col)} style={{ cursor: "pointer", userSelect: "none" }}>
-      {children}
-      {sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-    </th>
-  );
-
   const handleDrop = useCallback((event) => {
     event.preventDefault();
     setDragging(false);
@@ -624,6 +696,14 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     [uploadFiles]
   );
   const [showBatchValidation, setShowBatchValidation] = useState(false);
+  const selectedFacture = selected ? factures.find((facture) => String(facture.id) === String(selected.id)) || selected : null;
+  const selectedPriority = selectedFacture ? getFacturePriorityMeta(selectedFacture) : null;
+  const factureCounts = useMemo(() => ({
+    total: tabFactures.length,
+    review: tabFactures.filter((facture) => isFactureReviewNeeded(facture)).length,
+    pending: tabFactures.filter((facture) => facture.paiement === "en_attente").length,
+    overdue: tabFactures.filter((facture) => facture.paiement === "en_retard").length,
+  }), [tabFactures]);
 
   return (
     <div className="page-inner">
@@ -820,7 +900,6 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
 
       {(tab === "achats" || tab === "ventes") && (
         <>
-          {/* Stats rapides */}
           <div className="facture-stats">
             {[
               { label: "Total", val: formatMAD(tabFactures.reduce((s, f) => s + (f.montant_ttc || 0), 0)).split(",")[0], sub: `${tabFactures.length} facture${tabFactures.length > 1 ? "s" : ""}`, color: "var(--ink-0)" },
@@ -835,6 +914,48 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               </div>
             ))}
           </div>
+
+          <section className="facture-workspace-hero">
+            <div className="facture-workspace-hero__main">
+              <div className="facture-workspace-hero__eyebrow">Pilotage facturation</div>
+              <div className="facture-workspace-hero__title">
+                {tab === "achats" ? "Centraliser l’import, trier les priorités et ouvrir une facture en un clic." : "Suivre les ventes, les retards et les dossiers à revoir sans friction."}
+              </div>
+              <div className="facture-workspace-hero__subtitle">
+                La liste ci-dessous est pensée pour la revue: import récent, cas sensibles et ouverture rapide du détail comptable.
+              </div>
+            </div>
+            <div className="facture-workspace-hero__stats">
+              <div className="facture-hero-stat">
+                <Receipt size={16} />
+                <div>
+                  <strong>{factureCounts.total}</strong>
+                  <span>dans ce journal</span>
+                </div>
+              </div>
+              <div className="facture-hero-stat">
+                <Sparkles size={16} />
+                <div>
+                  <strong>{factureCounts.review}</strong>
+                  <span>à revoir</span>
+                </div>
+              </div>
+              <div className="facture-hero-stat">
+                <Wallet size={16} />
+                <div>
+                  <strong>{factureCounts.pending}</strong>
+                  <span>en attente</span>
+                </div>
+              </div>
+              <div className="facture-hero-stat">
+                <Clock3 size={16} />
+                <div>
+                  <strong>{factureCounts.overdue}</strong>
+                  <span>en retard</span>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <div className="filter-bar">
             <div className="filter-search">
@@ -860,79 +981,172 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
             <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--ink-2)" }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</div>
           </div>
 
-          {layout === "cards" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
-              {filtered.map((facture) => (
-                <button key={facture.id} className="card" style={{ padding: 16, textAlign: "left", cursor: "pointer" }} onClick={() => setSelected(facture)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{facture.fournisseur || "-"}</div>
-                    <StatutBadge statut={facture.statut} />
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginBottom: 8 }}>{facture.num_facture} · {formatDate(facture.date_facture)}</div>
-                  <div style={{ fontSize: 18, fontWeight: 500 }}>{formatMAD(facture.montant_ttc).split(",")[0]} <span style={{ fontSize: 11, color: "var(--ink-2)" }}>MAD</span></div>
-                  <div style={{ marginTop: 8 }}><PaiementBadge paiement={facture.paiement} /></div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <Th col="fournisseur">Fournisseur</Th>
-                    <Th col="num_facture">N° Facture</Th>
-                    <Th col="date_facture">Date</Th>
-                    <Th col="date_echeance">Échéance</Th>
-                    <Th col="montant_ttc" right>Montant TTC</Th>
-                    <th className="th">Statut</th>
-                    <th className="th">Paiement</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--ink-3)", fontSize: 13 }}>
-                        <div style={{ marginBottom: 6 }}>Aucune facture</div>
-                        <div style={{ fontSize: 12 }}>Importez des factures via le bouton Importer</div>
-                      </td>
-                    </tr>
-                  )}
+          <div className="facture-workspace">
+            <div className="facture-workspace__list">
+              <div className="facture-list-header">
+                <div>
+                  <div className="facture-list-header__title">Liste de travail</div>
+                  <div className="facture-list-header__subtitle">Cliquez sur une facture pour ouvrir la revue complète dans le panneau de détail.</div>
+                </div>
+                <div className="facture-list-header__summary">
+                  <span>{filtered.length} visible{filtered.length > 1 ? "s" : ""}</span>
+                  <span>{formatMAD(totalTTC).split(",")[0]} MAD</span>
+                </div>
+              </div>
+
+              {layout === "cards" ? (
+                <div className="facture-card-grid">
                   {filtered.map((facture) => (
-                    <tr key={facture.id} className="tr-hover" onClick={() => setSelected(facture)} style={{ cursor: "pointer" }}>
-                      <td className="td">
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{facture.fournisseur || "—"}</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{facture.code_tiers || facture.categorie || ""}</div>
-                      </td>
-                      <td className="td mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{facture.num_facture || "—"}</td>
-                      <td className="td" style={{ fontSize: 12.5 }}>{formatDateShort(facture.date_facture)}</td>
-                      <td className="td" style={{ fontSize: 12.5, color: facture.paiement === "en_retard" ? "var(--neg-ink)" : "var(--ink-1)", fontWeight: facture.paiement === "en_retard" ? 600 : 400 }}>
-                        {formatDateShort(facture.date_echeance)}
-                      </td>
-                      <td className="td right">
-                        <div className="tabular" style={{ fontWeight: 600, fontSize: 13 }}>{formatMAD(facture.montant_ttc).split(",")[0]} <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400 }}>MAD</span></div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>HT {formatMAD(facture.montant_ht).split(",")[0]}</div>
-                      </td>
-                      <td className="td"><StatutBadge statut={facture.statut} /></td>
-                      <td className="td"><PaiementBadge paiement={facture.paiement} /></td>
-                    </tr>
+                    <FactureListCard
+                      key={facture.id}
+                      facture={facture}
+                      active={String(selectedFacture?.id) === String(facture.id)}
+                      onOpen={setSelected}
+                    />
                   ))}
-                </tbody>
-                {filtered.length > 0 && (
-                  <tfoot>
-                    <tr style={{ borderTop: "2px solid var(--line-0)", background: "var(--bg-inset)" }}>
-                      <td colSpan={4} className="td" style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)" }}>
-                        Total · {filtered.length} facture{filtered.length > 1 ? "s" : ""}
-                      </td>
-                      <td className="td right tabular" style={{ fontWeight: 700, fontSize: 14 }}>
-                        {formatMAD(totalTTC).split(",")[0]} <span style={{ fontSize: 10, fontWeight: 400, color: "var(--ink-3)" }}>MAD</span>
-                      </td>
-                      <td colSpan={2} />
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                </div>
+              ) : (
+                <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <SortHeaderCell col="fournisseur" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Fournisseur</SortHeaderCell>
+                        <SortHeaderCell col="num_facture" sortCol={sortCol} sortDir={sortDir} onSort={sort}>N° Facture</SortHeaderCell>
+                        <SortHeaderCell col="date_facture" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Date</SortHeaderCell>
+                        <SortHeaderCell col="date_echeance" sortCol={sortCol} sortDir={sortDir} onSort={sort}>Échéance</SortHeaderCell>
+                        <SortHeaderCell col="montant_ttc" right sortCol={sortCol} sortDir={sortDir} onSort={sort}>Montant TTC</SortHeaderCell>
+                        <th className="th">Priorité</th>
+                        <th className="th">Paiement</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.length === 0 && (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--ink-3)", fontSize: 13 }}>
+                            <div style={{ marginBottom: 6 }}>Aucune facture</div>
+                            <div style={{ fontSize: 12 }}>Importez des factures via le bouton Importer</div>
+                          </td>
+                        </tr>
+                      )}
+                      {filtered.map((facture) => {
+                        const priority = getFacturePriorityMeta(facture);
+                        return (
+                          <tr key={facture.id} className="tr-hover" onClick={() => setSelected(facture)} style={{ cursor: "pointer" }}>
+                            <td className="td">
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{facture.fournisseur || "—"}</div>
+                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{facture.code_tiers || facture.categorie || ""}</div>
+                            </td>
+                            <td className="td mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{facture.num_facture || "—"}</td>
+                            <td className="td" style={{ fontSize: 12.5 }}>{formatDateShort(facture.date_facture)}</td>
+                            <td className="td" style={{ fontSize: 12.5, color: facture.paiement === "en_retard" ? "var(--neg-ink)" : "var(--ink-1)", fontWeight: facture.paiement === "en_retard" ? 600 : 400 }}>
+                              {formatDateShort(facture.date_echeance)}
+                            </td>
+                            <td className="td right">
+                              <div className="tabular" style={{ fontWeight: 600, fontSize: 13 }}>{formatMAD(facture.montant_ttc).split(",")[0]} <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400 }}>MAD</span></div>
+                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>HT {formatMAD(facture.montant_ht).split(",")[0]}</div>
+                            </td>
+                            <td className="td">
+                              <span className={`facture-priority-chip ${priority.tone}`}>
+                                {priority.icon}
+                                {priority.label}
+                              </span>
+                            </td>
+                            <td className="td"><PaiementBadge paiement={facture.paiement} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {filtered.length > 0 && (
+                      <tfoot>
+                        <tr style={{ borderTop: "2px solid var(--line-0)", background: "var(--bg-inset)" }}>
+                          <td colSpan={4} className="td" style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)" }}>
+                            Total · {filtered.length} facture{filtered.length > 1 ? "s" : ""}
+                          </td>
+                          <td className="td right tabular" style={{ fontWeight: 700, fontSize: 14 }}>
+                            {formatMAD(totalTTC).split(",")[0]} <span style={{ fontSize: 10, fontWeight: 400, color: "var(--ink-3)" }}>MAD</span>
+                          </td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )}
             </div>
-          )}
+
+            <aside className="facture-workspace__side">
+              <div className="facture-side-card">
+                <div className="facture-side-card__eyebrow">File prioritaire</div>
+                <div className="facture-side-card__title">À traiter maintenant</div>
+                <div className="facture-side-card__body">
+                  {reviewFactures.length > 0 ? reviewFactures.slice(0, 4).map((facture) => (
+                    <button
+                      key={facture.id}
+                      type="button"
+                      className="facture-side-item"
+                      onClick={() => setSelected(facture)}
+                    >
+                      <div>
+                        <div className="facture-side-item__title">{facture.fournisseur || "Facture à revoir"}</div>
+                        <div className="facture-side-item__meta">{facture.num_facture || "Sans numéro"} · {formatDateShort(facture.date_facture)}</div>
+                      </div>
+                      <span className="facture-side-item__badge">{Math.round((facture.confidence || 0) * 100)}%</span>
+                    </button>
+                  )) : (
+                    <div className="facture-side-empty">Aucune facture sensible pour ce journal.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="facture-side-card">
+                <div className="facture-side-card__eyebrow">Sélection active</div>
+                <div className="facture-side-card__title">Pré-ouverture</div>
+                <div className="facture-side-card__body">
+                  {selectedFacture ? (
+                    <>
+                      <div className="facture-preview">
+                        <div className="facture-preview__top">
+                          <div>
+                            <div className="facture-preview__title">{selectedFacture.fournisseur || "Fournisseur à confirmer"}</div>
+                            <div className="facture-preview__meta">{selectedFacture.num_facture || "Sans numéro"} · {formatDateShort(selectedFacture.date_facture)}</div>
+                          </div>
+                          {selectedPriority && (
+                            <span className={`facture-priority-chip ${selectedPriority.tone}`}>
+                              {selectedPriority.icon}
+                              {selectedPriority.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="facture-preview__grid">
+                          <div>
+                            <span>Montant TTC</span>
+                            <strong>{formatMAD(selectedFacture.montant_ttc || 0).split(",")[0]} MAD</strong>
+                          </div>
+                          <div>
+                            <span>Échéance</span>
+                            <strong>{formatDateShort(selectedFacture.date_echeance)}</strong>
+                          </div>
+                          <div>
+                            <span>Statut</span>
+                            <strong>{selectedFacture.validation_status || selectedFacture.statut || "—"}</strong>
+                          </div>
+                          <div>
+                            <span>Confiance IA</span>
+                            <strong>{Math.round((selectedFacture.confidence || 0) * 100)}%</strong>
+                          </div>
+                        </div>
+                      </div>
+                      <button className="btn btn-primary" onClick={() => setSelected(selectedFacture)}>
+                        <FileText size={13} /> Ouvrir la facture
+                      </button>
+                    </>
+                  ) : (
+                    <div className="facture-side-empty">Sélectionnez une facture dans la liste pour ouvrir son panneau de détail.</div>
+                  )}
+                </div>
+              </div>
+            </aside>
+          </div>
         </>
       )}
 
