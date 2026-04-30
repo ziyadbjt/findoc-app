@@ -2600,7 +2600,7 @@
   box-shadow: var(--glass-shadow-pop);
   z-index: 51;
   width: min(92vw, 620px);
-  animation: pop-in 180ms ease-out;
+  animation: dialog-rise 220ms cubic-bezier(.2, .8, .2, 1);
 }
 
 [data-theme="light"] .modal {
@@ -3816,7 +3816,6 @@
   background: linear-gradient(90deg, rgba(143, 212, 188, 0.11), rgba(143, 212, 188, 0.045));
 }
 
-.modal,
 .drawer {
   animation: glass-rise 220ms cubic-bezier(.2, .8, .2, 1);
 }
@@ -3847,6 +3846,19 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.985);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
     filter: blur(0);
   }
 }
