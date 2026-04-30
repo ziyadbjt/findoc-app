@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { Check, ChevronRight, Download, FileText, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react";
 
@@ -18,6 +19,11 @@ const TABS = [
 ];
 
 const buildTpeStorageKey = (dossierId) => `tpe-transactions:${dossierId || "demo"}`;
+
+function ModalPortal({ children }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
 
 
 function StatutBadge({ statut }) {
@@ -742,7 +748,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       )}
 
       {showUpload && (
-        <>
+        <ModalPortal>
           <div className="scrim" onClick={() => { setShowUpload(false); setUploadFiles([]); }} />
           <div className="modal">
             <div className="modal-head">
@@ -800,7 +806,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               </button>
             </div>
           </div>
-        </>
+        </ModalPortal>
       )}
 
       <ExportDialog

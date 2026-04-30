@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { Download, FileSpreadsheet, FileText, X } from "lucide-react";
 
@@ -235,6 +236,7 @@ export default function ExportDialog({
   const rows = format === "sage" ? sageRows : factureRows;
 
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
   const handleExport = () => {
     if (!rows.length) {
@@ -280,7 +282,7 @@ export default function ExportDialog({
     onClose?.();
   };
 
-  return (
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <div className="modal">
@@ -390,6 +392,7 @@ export default function ExportDialog({
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
