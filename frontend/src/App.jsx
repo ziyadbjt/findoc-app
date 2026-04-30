@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { ToastProvider } from "./context/ToastContext"
 
-const Home = lazy(() => import("./pages/Home"))
 const Login = lazy(() => import("./pages/Login"))
 const Dossiers = lazy(() => import("./pages/Dossiers"))
 const Dashboard = lazy(() => import("./pages/Dashboard"))
@@ -43,12 +42,12 @@ function AnimatedRoutes() {
     <div key={location.pathname} className="app-route-shell">
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
           <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
     </div>
