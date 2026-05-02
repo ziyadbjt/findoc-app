@@ -710,6 +710,51 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     pending: tabFactures.filter((facture) => facture.paiement === "en_attente").length,
     overdue: tabFactures.filter((facture) => facture.paiement === "en_retard").length,
   }), [tabFactures]);
+  const selectionCounts = useMemo(() => ({
+    review: filtered.filter((facture) => isFactureReviewNeeded(facture)).length,
+    pending: filtered.filter((facture) => facture.paiement === "en_attente").length,
+    overdue: filtered.filter((facture) => facture.paiement === "en_retard").length,
+  }), [filtered]);
+  const factureHero = useMemo(() => {
+    const journal = tab === "ventes" ? "Ventes" : "Achats";
+    const visibleAmount = `${formatMAD(totalTTC).split(",")[0]} MAD`;
+    const visibleLabel = `${filtered.length} ligne${filtered.length > 1 ? "s" : ""}`;
+
+    if (selectionCounts.review > 0) {
+      return {
+        eyebrow: `${journal} - ${visibleLabel}`,
+        title: `${selectionCounts.review} facture${selectionCounts.review > 1 ? "s" : ""} a revoir`,
+        subtitle: `${visibleAmount} visibles. Priorite aux statuts a verifier, aux confiances faibles et aux rattachements comptables incomplets.`,
+      };
+    }
+
+    if (selectionCounts.overdue > 0) {
+      return {
+        eyebrow: `${journal} - retards actifs`,
+        title: `${selectionCounts.overdue} facture${selectionCounts.overdue > 1 ? "s" : ""} en retard sur la selection`,
+        subtitle: `${visibleAmount} visibles. Les echeances depassees passent avant les nouvelles validations.`,
+      };
+    }
+
+    if (selectionCounts.pending > 0) {
+      return {
+        eyebrow: `${journal} - paiements ouverts`,
+        title: `${selectionCounts.pending} paiement${selectionCounts.pending > 1 ? "s" : ""} en attente`,
+        subtitle: `${visibleAmount} visibles. Le suivi porte sur les prochaines echeances et les montants non soldes.`,
+      };
+    }
+
+    return {
+      eyebrow: `${journal} - ${visibleLabel}`,
+      title: filtered.length ? "Aucun signal bloquant sur la selection" : "Aucune facture dans la selection",
+      subtitle: filtered.length
+        ? `${visibleAmount} visibles. Les factures ouvertes peuvent etre traitees en revue standard.`
+        : "Les filtres actuels ne remontent aucune ligne a traiter.",
+    };
+  }, [filtered.length, selectionCounts.overdue, selectionCounts.pending, selectionCounts.review, tab, totalTTC]);
+  const factureListSubtitle = filtered.length
+    ? `${filtered.length} ligne${filtered.length > 1 ? "s" : ""} filtre${filtered.length > 1 ? "es" : "e"} - ${formatMAD(totalTTC).split(",")[0]} MAD visibles.`
+    : "Aucune ligne ne correspond aux filtres actuels.";
 
   return (
     <div className="page-inner">
@@ -923,13 +968,9 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
 
           <section className="facture-workspace-hero">
             <div className="facture-workspace-hero__main">
-              <div className="facture-workspace-hero__eyebrow">Pilotage facturation</div>
-              <div className="facture-workspace-hero__title">
-                {tab === "achats" ? "Centraliser l’import, trier les priorités et ouvrir une facture en un clic." : "Suivre les ventes, les retards et les dossiers à revoir sans friction."}
-              </div>
-              <div className="facture-workspace-hero__subtitle">
-                La liste ci-dessous est pensée pour la revue: import récent, cas sensibles et ouverture rapide du détail comptable.
-              </div>
+              <div className="facture-workspace-hero__eyebrow">{factureHero.eyebrow}</div>
+              <div className="facture-workspace-hero__title">{factureHero.title}</div>
+              <div className="facture-workspace-hero__subtitle">{factureHero.subtitle}</div>
             </div>
             <div className="facture-workspace-hero__stats">
               <div className="facture-hero-stat">
@@ -992,7 +1033,7 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
               <div className="facture-list-header">
                 <div>
                   <div className="facture-list-header__title">Liste de travail</div>
-                  <div className="facture-list-header__subtitle">Cliquez sur une facture pour ouvrir la revue complète dans le panneau de détail.</div>
+                  <div className="facture-list-header__subtitle">{factureListSubtitle}</div>
                 </div>
                 <div className="facture-list-header__summary">
                   <span>{filtered.length} visible{filtered.length > 1 ? "s" : ""}</span>

@@ -6,15 +6,30 @@ import Drawer from "../components/Drawer";
 import { formatMAD, formatDate } from "../utils/format";
 
 const DASHBOARD_WIDGETS = [
-  { key: "hero", label: "Vue d'ensemble", desc: "Bloc d'ouverture avec KPIs et actions rapides." },
+  { key: "hero", label: "Vue d'ensemble", desc: "Montants, retards et signaux du dossier." },
   { key: "finance", label: "Tendance & balance âgée", desc: "Flux d'achats et exposition fournisseurs." },
   { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice précédent." },
   { key: "suppliers", label: "Top fournisseurs", desc: "Concentration des achats par tiers." },
   { key: "activity", label: "Activité du dossier", desc: "Actions récentes et signaux de suivi." },
 ];
 
+function getDefaultWidgetPrefs() {
+  return DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {});
+}
+
 function getDashboardPrefsKey(user, dossier) {
   return `findoc:dashboard:${user?.email || "anon"}:${dossier?.id || "global"}`;
+}
+
+function readDashboardPrefs(user, dossier) {
+  try {
+    const raw = localStorage.getItem(getDashboardPrefsKey(user, dossier));
+    if (!raw) return getDefaultWidgetPrefs();
+    const parsed = JSON.parse(raw);
+    return DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: parsed?.[widget.key] !== false }), {});
+  } catch {
+    return getDefaultWidgetPrefs();
+  }
 }
 
 function MiniTrend({ data, color = "var(--accent)" }) {
@@ -112,26 +127,14 @@ function ComparaisonNvsN1({ factures }) {
   );
 }
 
-export default function OverviewPage({ factures, dossier, dossierId, onNavigate, user }) {
-  const now = new Date();
+export default function OverviewPage({ factures, dossier, onNavigate, user }) {
+  const now = useMemo(() => new Date(), []);
   const [showCustomize, setShowCustomize] = useState(false);
-  const [visibleWidgets, setVisibleWidgets] = useState(() =>
-    DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {})
-  );
+  const [visibleWidgets, setVisibleWidgets] = useState(() => readDashboardPrefs(user, dossier));
 
   useEffect(() => {
-    const key = getDashboardPrefsKey(user, dossier);
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) {
-        setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: parsed?.[widget.key] !== false }), {}));
-    } catch {
-      setVisibleWidgets(DASHBOARD_WIDGETS.reduce((acc, widget) => ({ ...acc, [widget.key]: true }), {}));
-    }
+    const timeout = window.setTimeout(() => setVisibleWidgets(readDashboardPrefs(user, dossier)), 0);
+    return () => window.clearTimeout(timeout);
   }, [dossier, user]);
 
   const updateWidgetVisibility = (key, checked) => {
@@ -152,11 +155,14 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
     return buckets;
   }, [factures, now]);
 
-  const processed = factures.filter((f) => f.statut === "traite" || f.statut === "traité");
-  const totalAchats = processed.reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const totalTva = processed.reduce((s, f) => s + (f.tva || 0), 0);
-  const overdue = factures.filter((f) => f.paiement === "en_retard");
-  const overdueTotal = overdue.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const processed = useMemo(
+    () => factures.filter((f) => f.statut === "traite" || f.statut === "traité"),
+    [factures]
+  );
+  const totalAchats = useMemo(() => processed.reduce((s, f) => s + (f.montant_ttc || 0), 0), [processed]);
+  const totalTva = useMemo(() => processed.reduce((s, f) => s + (f.tva || 0), 0), [processed]);
+  const overdue = useMemo(() => factures.filter((f) => f.paiement === "en_retard"), [factures]);
+  const overdueTotal = useMemo(() => overdue.reduce((s, f) => s + (f.montant_ttc || 0), 0), [overdue]);
 
   const topFournisseurs = useMemo(() => {
     const map = new Map();
@@ -270,6 +276,11 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
     }
     return alerts;
   }, [factures, overdue, now]);
+  const overviewHeroSubtitle = overdue.length > 0
+    ? `${overdue.length} retard${overdue.length > 1 ? "s" : ""} ouvert${overdue.length > 1 ? "s" : ""} pour ${formatMAD(overdueTotal).split(",")[0]} MAD exposes.`
+    : smartAlerts.length > 0
+      ? `${smartAlerts.length} signal${smartAlerts.length > 1 ? "s" : ""} actif${smartAlerts.length > 1 ? "s" : ""} sur le dossier courant.`
+      : `${processed.length} facture${processed.length > 1 ? "s" : ""} comptabilisee${processed.length > 1 ? "s" : ""}, ${formatMAD(totalAchats).split(",")[0]} MAD suivis.`;
 
   return (
     <div className="page-inner">
@@ -366,7 +377,7 @@ export default function OverviewPage({ factures, dossier, dossierId, onNavigate,
                 {dossier?.raison_sociale || "Tableau de bord"}
               </h1>
               <p className="page-subtitle" style={{ maxWidth: 720, fontSize: 15, lineHeight: 1.7 }}>
-                Santé financière du dossier, alertes actives et actions prioritaires en un coup d'œil.
+                {overviewHeroSubtitle}
               </p>
             </div>
 

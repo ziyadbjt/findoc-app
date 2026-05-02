@@ -21,6 +21,7 @@ const TVAPage = lazy(() => import("./TVAPage"));
 const AuditPage = lazy(() => import("./AuditPage"));
 const AnomaliesPage = lazy(() => import("./AnomaliesPage"));
 const TresoPage = lazy(() => import("./TresoPage"));
+const FinanceOpsPage = lazy(() => import("./FinanceOpsPage"));
 const ReconciliationPage = lazy(() => import("./ReconciliationPage"));
 const RapportMensuelPage = lazy(() => import("./RapportMensuelPage"));
 
@@ -35,6 +36,7 @@ const CRUMBS = {
   audit: ["Dossier", "Audit"],
   anomalies: ["Dossier", "Anomalies"],
   treso: ["Dossier", "Trésorerie"],
+  finance_ops: ["Dossier", "Pilotage financier"],
   reconciliation: ["Dossier", "Réconciliation"],
   parametres: ["Dossier", "Paramètres"],
   rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
@@ -300,6 +302,7 @@ export default function Dashboard() {
     if (route === "audit") return <AuditPage dossier={dossier} user={user} />;
     if (route === "anomalies") return <AnomaliesPage factures={factures} />;
     if (route === "treso") return <TresoPage factures={factures} dossier={dossier} />;
+    if (route === "finance_ops") return <FinanceOpsPage {...pageProps} onNavigate={setRoute} />;
     if (route === "reconciliation") return <ReconciliationPage factures={factures} dossierId={id} />;
     if (route === "parametres") return <SettingsPage dossier={dossier} onUpdateDossier={handleUpdateDossier} />;
     if (route === "rapport_mensuel") return <RapportMensuelPage dossierId={id} dossier={dossier} />;

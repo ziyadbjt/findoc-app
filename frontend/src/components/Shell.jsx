@@ -50,6 +50,7 @@ export function Sidebar({ route, setRoute, dossier, onSwitchDossier, counts, onL
     { key: "tiers",          label: "Tiers",        icon: <Building2 size={16} /> },
     { key: "tva",            label: "TVA",          icon: <Receipt size={16} /> },
     { key: "treso",          label: "Trésorerie",   icon: <TrendingUp size={16} /> },
+    { key: "finance_ops",    label: "Pilotage",     icon: <Sparkles size={16} /> },
   ];
 
   const secondaryNav = [
@@ -139,6 +140,7 @@ const ROUTE_LABELS = {
   tiers:          "Tiers",
   tva:            "Déclaration TVA",
   treso:          "Trésorerie",
+  finance_ops:    "Pilotage financier",
   anomalies:      "Anomalies",
   audit:          "Audit",
   journal:        "Extraction",
@@ -198,6 +200,7 @@ export function CmdK({ open, onClose, onNavigate, onUpload, onExport }) {
     { group: "Navigation", label: "Tiers", icon: <Building2 size={14} />, action: () => onNavigate("tiers"), kbd: "G T" },
     { group: "Navigation", label: "Déclaration TVA", icon: <Receipt size={14} />, action: () => onNavigate("tva"), kbd: "G V" },
     { group: "Navigation", label: "Trésorerie", icon: <Home size={14} />, action: () => onNavigate("treso"), kbd: "G C" },
+    { group: "Navigation", label: "Pilotage financier", icon: <Sparkles size={14} />, action: () => onNavigate("finance_ops"), kbd: "G P" },
     { group: "Navigation", label: "Réconciliation", icon: <Building2 size={14} />, action: () => onNavigate("reconciliation"), kbd: "G B" },
     { group: "Navigation", label: "Audit", icon: <ShieldCheck size={14} />, action: () => onNavigate("audit") },
     { group: "Actions", label: "Importer des factures", icon: <Plus size={14} />, action: onUpload, kbd: "U" },

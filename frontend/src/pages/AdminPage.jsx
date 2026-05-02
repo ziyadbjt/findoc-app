@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -85,7 +85,7 @@ export default function AdminPage() {
 
   const isAdmin = user?.role === "admin";
 
-  const loadAdminData = async () => {
+  const loadAdminData = useCallback(async () => {
     if (!token || !isAdmin) return;
     setLoading(true);
     try {
@@ -141,11 +141,11 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, toast, token]);
 
   useEffect(() => {
     loadAdminData();
-  }, [token, isAdmin]);
+  }, [loadAdminData]);
 
   const createUser = async () => {
     if (!draft.nom.trim() || !draft.email.trim()) {
@@ -202,6 +202,15 @@ export default function AdminPage() {
       tvaBalance,
     };
   }, [cabinetRows]);
+  const cabinetSubtitle = useMemo(() => {
+    if (cabinetStats.lateFactures > 0) {
+      return `${cabinetStats.lateFactures} facture${cabinetStats.lateFactures > 1 ? "s" : ""} en retard sur ${cabinetStats.dossiers} dossier${cabinetStats.dossiers > 1 ? "s" : ""}.`;
+    }
+    if (cabinetStats.pendingFactures > 0) {
+      return `${cabinetStats.pendingFactures} facture${cabinetStats.pendingFactures > 1 ? "s" : ""} a valider avant cloture.`;
+    }
+    return `${cabinetStats.dossiers} dossier${cabinetStats.dossiers > 1 ? "s" : ""} actif${cabinetStats.dossiers > 1 ? "s" : ""}, ${formatMAD(cabinetStats.totalVolume).split(",")[0]} MAD suivis.`;
+  }, [cabinetStats]);
 
   const spotlightRows = useMemo(
     () =>
@@ -309,7 +318,7 @@ export default function AdminPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">Vue cabinet</h1>
-            <p className="page-subtitle">Lecture rapide des priorites avant d'entrer dans un dossier</p>
+            <p className="page-subtitle">{cabinetSubtitle}</p>
           </div>
           <button className="btn" onClick={loadAdminData} disabled={loading}>
             <RefreshCw size={13} /> Rafraichir
