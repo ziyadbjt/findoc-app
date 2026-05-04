@@ -11,8 +11,8 @@ const BASE =
 
 const auth = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 
-export const loginUser = (email, password) => {
-  const form = new URLSearchParams({ username: email, password });
+export const loginUser = (identifier, password) => {
+  const form = new URLSearchParams({ username: identifier, password });
   return axios.post(`${BASE}/auth/login`, form, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });

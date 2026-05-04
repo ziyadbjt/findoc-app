@@ -199,9 +199,9 @@ function BanqueTab({ factures, dossierId }) {
       setPairs(suggestedPairs);
       setIgnored({});
       setActiveLine(null);
-      toast(`${lines.length} ligne(s) de releve extraites`, "pos");
+      toast(`${lines.length} ligne(s) de relevé extraites`, "pos");
     } catch {
-      toast("Erreur import releve bancaire", "neg");
+      toast("Erreur import relevé bancaire", "neg");
     } finally {
       setUploadingBank(false);
       event.target.value = "";
@@ -251,14 +251,14 @@ function BanqueTab({ factures, dossierId }) {
             <RefreshCw size={13} /> Auto-match
           </button>
           <button className="btn btn-primary" onClick={() => uploadRef.current?.click()} disabled={uploadingBank}>
-            <Upload size={13} /> {uploadingBank ? "Analyse..." : "Importer releve"}
+            <Upload size={13} /> {uploadingBank ? "Analyse..." : "Importer relevé"}
           </button>
           <input ref={uploadRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.txt" style={{ display: "none" }} onChange={handleBankUpload} />
         </div>
 
         {matched > 0 && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-1)", display: "flex", gap: 20, fontSize: 12, flexWrap: "wrap" }}>
-            <span style={{ color: "var(--ink-2)" }}>Releve · <span className="mono tabular" style={{ color: "var(--ink-0)" }}>{formatMAD(totalBank).split(",")[0]} MAD</span></span>
+            <span style={{ color: "var(--ink-2)" }}>Relevé · <span className="mono tabular" style={{ color: "var(--ink-0)" }}>{formatMAD(totalBank).split(",")[0]} MAD</span></span>
             <span style={{ color: "var(--ink-2)" }}>Factures · <span className="mono tabular" style={{ color: "var(--ink-0)" }}>{formatMAD(totalFacture).split(",")[0]} MAD</span></span>
             <AmountDiff a={totalBank} b={totalFacture} />
           </div>
@@ -273,14 +273,14 @@ function BanqueTab({ factures, dossierId }) {
 
       {bankLines.length === 0 && (
         <div className="card" style={{ padding: 28, marginBottom: 12, textAlign: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucun releve importe</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Importez un PDF ou une image de releve bancaire pour lancer l'extraction Google Document AI.</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucun relevé importé</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Importez un PDF ou une image de relevé bancaire pour lancer l'extraction Google Document AI.</div>
         </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: activeLine ? "1fr 1fr" : "1fr", gap: 12 }}>
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--line-1)", fontSize: 13, fontWeight: 500 }}>Lignes de releve</div>
+          <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--line-1)", fontSize: 13, fontWeight: 500 }}>Lignes de relevé</div>
           <div style={{ overflowY: "auto", maxHeight: 480 }}>
             {linesToShow.map((line) => {
               const matchedFactureId = pairs[line.id];
@@ -437,7 +437,7 @@ function TPETab({ transactions, setTransactions, onExport }) {
         toast("Aucune transaction TPE exploitable trouvee", "neg");
       } else {
         setTransactions(rows);
-        toast(`${rows.length} transaction(s) TPE importee(s)`, "pos");
+        toast(`${rows.length} transaction(s) TPE importée(s)`, "pos");
       }
     } catch {
       toast("Erreur import TPE", "neg");
@@ -483,7 +483,7 @@ function TPETab({ transactions, setTransactions, onExport }) {
 
       {transactions.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucune transaction TPE importee</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Aucune transaction TPE importée</div>
           <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
             Chargez un export de terminal ou un relevé de remises pour alimenter ce journal.
           </div>
@@ -702,7 +702,9 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     [uploadFiles]
   );
   const [showBatchValidation, setShowBatchValidation] = useState(false);
-  const selectedFacture = selected ? factures.find((facture) => String(facture.id) === String(selected.id)) || selected : null;
+  const selectedFacture = selected
+    ? { ...(factures.find((facture) => String(facture.id) === String(selected.id)) || {}), ...selected }
+    : null;
   const selectedPriority = selectedFacture ? getFacturePriorityMeta(selectedFacture) : null;
   const factureCounts = useMemo(() => ({
     total: tabFactures.length,
@@ -723,16 +725,16 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
     if (selectionCounts.review > 0) {
       return {
         eyebrow: `${journal} - ${visibleLabel}`,
-        title: `${selectionCounts.review} facture${selectionCounts.review > 1 ? "s" : ""} a revoir`,
-        subtitle: `${visibleAmount} visibles. Priorite aux statuts a verifier, aux confiances faibles et aux rattachements comptables incomplets.`,
+        title: `${selectionCounts.review} facture${selectionCounts.review > 1 ? "s" : ""} à revoir`,
+        subtitle: `${visibleAmount} visibles. Priorité aux statuts à vérifier, aux confiances faibles et aux rattachements comptables incomplets.`,
       };
     }
 
     if (selectionCounts.overdue > 0) {
       return {
         eyebrow: `${journal} - retards actifs`,
-        title: `${selectionCounts.overdue} facture${selectionCounts.overdue > 1 ? "s" : ""} en retard sur la selection`,
-        subtitle: `${visibleAmount} visibles. Les echeances depassees passent avant les nouvelles validations.`,
+        title: `${selectionCounts.overdue} facture${selectionCounts.overdue > 1 ? "s" : ""} en retard sur la sélection`,
+        subtitle: `${visibleAmount} visibles. Les échéances dépassées passent avant les nouvelles validations.`,
       };
     }
 
@@ -740,16 +742,16 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
       return {
         eyebrow: `${journal} - paiements ouverts`,
         title: `${selectionCounts.pending} paiement${selectionCounts.pending > 1 ? "s" : ""} en attente`,
-        subtitle: `${visibleAmount} visibles. Le suivi porte sur les prochaines echeances et les montants non soldes.`,
+        subtitle: `${visibleAmount} visibles. Le suivi porte sur les prochaines échéances et les montants non soldés.`,
       };
     }
 
     return {
       eyebrow: `${journal} - ${visibleLabel}`,
-      title: filtered.length ? "Aucun signal bloquant sur la selection" : "Aucune facture dans la selection",
+      title: filtered.length ? "Aucun signal bloquant sur la sélection" : "Aucune facture dans la sélection",
       subtitle: filtered.length
-        ? `${visibleAmount} visibles. Les factures ouvertes peuvent etre traitees en revue standard.`
-        : "Les filtres actuels ne remontent aucune ligne a traiter.",
+        ? `${visibleAmount} visibles. Les factures ouvertes peuvent être traitées en revue standard.`
+        : "Les filtres actuels ne remontent aucune ligne à traiter.",
     };
   }, [filtered.length, selectionCounts.overdue, selectionCounts.pending, selectionCounts.review, tab, totalTTC]);
   const factureListSubtitle = filtered.length
@@ -1299,8 +1301,8 @@ export default function FacturesPage({ factures, dossierId, onRefresh, ecritures
 
       {selected && (
         <FactureDetail
-          facture={selected}
-          ecritures={(ecritures || []).filter((ecriture) => ecriture.facture_id === selected.id)}
+          facture={selectedFacture}
+          ecritures={(ecritures || []).filter((ecriture) => String(ecriture.facture_id) === String(selectedFacture.id))}
           onClose={() => setSelected(null)}
           reviewQueue={reviewFactures}
           onSelectFacture={setSelected}

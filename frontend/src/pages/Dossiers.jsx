@@ -451,6 +451,17 @@ export default function Dossiers() {
     (d.ville || "").toLowerCase().includes(q.toLowerCase()) ||
     (d.ice || "").includes(q)
   );
+  const dossierStats = useMemo(() => {
+    const cities = new Set(dossiers.map((d) => d.ville).filter(Boolean));
+    const tvaEncaissements = dossiers.filter((d) => d.regime_tva === "encaissements").length;
+    const filledIce = dossiers.filter((d) => d.ice).length;
+    return {
+      total: dossiers.length,
+      cities: cities.size,
+      tvaEncaissements,
+      filledIce,
+    };
+  }, [dossiers]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-0)" }}>
@@ -483,16 +494,33 @@ export default function Dossiers() {
       </header>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 40px" }}>
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-0.025em", margin: "0 0 6px" }}>
-            Sur quel dossier travaillez-vous ?
-          </h1>
-          <p style={{ fontSize: 14, color: "var(--ink-2)", margin: 0 }}>
-            Sélectionnez un client pour charger son environnement comptable.
-          </p>
+        <div className="dossiers-hero">
+          <div>
+            <div className="badge accent">Portefeuille cabinet</div>
+            <h1>Sur quel dossier travaillez-vous ?</h1>
+            <p>Sélectionnez un client pour charger son environnement comptable, ses factures et ses indicateurs de pilotage.</p>
+          </div>
+          <div className="dossiers-hero__stats">
+            <div>
+              <strong>{dossierStats.total}</strong>
+              <span>dossiers</span>
+            </div>
+            <div>
+              <strong>{dossierStats.cities}</strong>
+              <span>villes</span>
+            </div>
+            <div>
+              <strong>{dossierStats.filledIce}</strong>
+              <span>ICE renseignés</span>
+            </div>
+            <div>
+              <strong>{dossierStats.tvaEncaissements}</strong>
+              <span>TVA encaissements</span>
+            </div>
+          </div>
         </div>
 
-<div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
           <div className="filter-search" style={{ flex: 1, maxWidth: 420 }}>
             <Search size={14} />
             <input placeholder="Rechercher par raison sociale, ville, ICE…" value={q} onChange={e => setQ(e.target.value)} />

@@ -10,7 +10,8 @@ const SKIP_LOGIN =
   IS_VERCEL_PREVIEW
 const DEV_USER = {
   id: 1,
-  email: "ziyad@cabinetchami.ma",
+  email: "ziyad@findoc.local",
+  username: "ziyad",
   nom: "Ziyad",
   role: "admin",
   status: "active",
@@ -29,8 +30,13 @@ export function AuthProvider({ children }) {
     return me.data
   }
 
-  const loginWithCredentials = async (email, password) => {
-    const res = await loginUser(email, password)
+  const loginWithCredentials = async (identifier, password) => {
+    const res = await loginUser(identifier, password)
+    return hydrateSession(res.data.access_token)
+  }
+
+  const loginDemoSession = async () => {
+    const res = await loginUser("ziyad", "ziyad123")
     return hydrateSession(res.data.access_token)
   }
 
@@ -41,15 +47,23 @@ export function AuthProvider({ children }) {
         if (storedToken) {
           await hydrateSession(storedToken)
         } else if (SKIP_LOGIN) {
-          const res = await loginUser("ziyad@cabinetchami.ma", "password123")
-          await hydrateSession(res.data.access_token)
+          await loginDemoSession()
         }
       } catch {
+        localStorage.removeItem("token")
         if (SKIP_LOGIN) {
-          setToken("dev-preview-token")
-          setUser(DEV_USER)
+          try {
+            await loginDemoSession()
+          } catch {
+            if (import.meta.env.DEV) {
+              setToken("dev-preview-token")
+              setUser(DEV_USER)
+            } else {
+              setToken(null)
+              setUser(null)
+            }
+          }
         } else {
-          localStorage.removeItem("token")
           setToken(null)
           setUser(null)
         }
@@ -60,8 +74,8 @@ export function AuthProvider({ children }) {
     bootstrap()
   }, [])
 
-  const login = async (email, password) => {
-    return loginWithCredentials(email, password)
+  const login = async (identifier, password) => {
+    return loginWithCredentials(identifier, password)
   }
 
   const logout = () => {
@@ -78,4 +92,5 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)

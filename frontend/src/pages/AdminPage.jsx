@@ -44,29 +44,29 @@ function getTVAStatus(row) {
   const absoluteBalance = Math.abs(Number(row.tvaBalance || 0));
   if (row.pendingCount >= 3) {
     return {
-      label: "A verifier",
+      label: "À vérifier",
       tone: "warn",
-      reason: `${row.pendingCount} facture(s) non validee(s) impactent le calcul`,
+      reason: `${row.pendingCount} facture(s) non validée(s) impactent le calcul`,
     };
   }
   if (row.lateCount >= 2) {
     return {
       label: "Sous tension",
       tone: "warn",
-      reason: `${row.lateCount} retard(s) sur des pieces a suivre`,
+      reason: `${row.lateCount} retard(s) sur des pièces à suivre`,
     };
   }
   if (absoluteBalance >= 20000) {
     return {
       label: "Prioritaire",
       tone: "accent",
-      reason: `Solde estime eleve: ${formatMAD(row.tvaBalance)}`,
+      reason: `Solde estimé élevé: ${formatMAD(row.tvaBalance)}`,
     };
   }
   return {
     label: "Stable",
     tone: "pos",
-    reason: "Aucun signal fort sur la periode",
+    reason: "Aucun signal fort sur la période",
   };
 }
 
@@ -156,7 +156,7 @@ export default function AdminPage() {
       const res = await createAdminUser(token, draft);
       setUsers((prev) => [...prev, res.data].sort((a, b) => (a.nom || a.email).localeCompare(b.nom || b.email)));
       setDraft({ nom: "", email: "", role: "collab", password: "" });
-      toast("Utilisateur cree", "pos");
+      toast("Utilisateur créé", "pos");
     } catch {
       toast("Creation impossible", "neg");
     }
@@ -166,7 +166,7 @@ export default function AdminPage() {
     try {
       const res = await updateAdminUser(token, row.id, payload);
       setUsers((prev) => prev.map((item) => (item.id === row.id ? res.data : item)));
-      toast("Utilisateur mis a jour", "pos");
+      toast("Utilisateur mis à jour", "pos");
     } catch {
       toast("Mise a jour impossible", "neg");
     }
@@ -178,7 +178,7 @@ export default function AdminPage() {
     try {
       await deleteDossier(token, row.dossier.id);
       setCabinetRows((prev) => prev.filter((item) => item.dossier.id !== row.dossier.id));
-      toast("Dossier supprime", "pos");
+      toast("Dossier supprimé", "pos");
     } catch {
       toast("Suppression impossible", "neg");
     }
@@ -207,7 +207,7 @@ export default function AdminPage() {
       return `${cabinetStats.lateFactures} facture${cabinetStats.lateFactures > 1 ? "s" : ""} en retard sur ${cabinetStats.dossiers} dossier${cabinetStats.dossiers > 1 ? "s" : ""}.`;
     }
     if (cabinetStats.pendingFactures > 0) {
-      return `${cabinetStats.pendingFactures} facture${cabinetStats.pendingFactures > 1 ? "s" : ""} a valider avant cloture.`;
+      return `${cabinetStats.pendingFactures} facture${cabinetStats.pendingFactures > 1 ? "s" : ""} à valider avant clôture.`;
     }
     return `${cabinetStats.dossiers} dossier${cabinetStats.dossiers > 1 ? "s" : ""} actif${cabinetStats.dossiers > 1 ? "s" : ""}, ${formatMAD(cabinetStats.totalVolume).split(",")[0]} MAD suivis.`;
   }, [cabinetStats]);
@@ -284,11 +284,11 @@ export default function AdminPage() {
             <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
             <span style={{ fontWeight: 600, fontSize: 14 }}>Administration</span>
           </div>
-          <button className="icon-btn" onClick={() => { logout(); navigate("/login"); }} title="Deconnexion">↗</button>
+          <button className="icon-btn" onClick={() => { logout(); navigate("/login"); }} title="Déconnexion">↗</button>
         </header>
         <div className="page-inner">
           <div className="card" style={{ padding: 24, maxWidth: 560 }}>
-            <div className="card-title" style={{ marginBottom: 10 }}>Acces reserve</div>
+            <div className="card-title" style={{ marginBottom: 10 }}>Accès réservé</div>
             <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
               Cette page est accessible uniquement au role admin.
             </div>
@@ -307,7 +307,7 @@ export default function AdminPage() {
         <img src={theme === "light" ? "/logo-findoc-day-v2-transparent.png" : "/logo-findoc-night-transparent.png"} alt="FinDoc" style={{ height: 28, width: "auto" }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Administration cabinet</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>Pilotage des dossiers, alertes et acces de l'organisation</div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>Pilotage des dossiers, alertes et accès de l'organisation</div>
         </div>
         <Link to="/dossiers" className="btn btn-ghost">
           <ArrowLeft size={14} /> Dossiers
@@ -321,7 +321,7 @@ export default function AdminPage() {
             <p className="page-subtitle">{cabinetSubtitle}</p>
           </div>
           <button className="btn" onClick={loadAdminData} disabled={loading}>
-            <RefreshCw size={13} /> Rafraichir
+            <RefreshCw size={13} /> Rafraîchir
           </button>
         </div>
 
@@ -334,7 +334,7 @@ export default function AdminPage() {
           <div className="kpi">
             <div className="kpi-label"><AlertTriangle size={14} /> Factures en retard</div>
             <div className="kpi-value">{cabinetStats.lateFactures}</div>
-            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{cabinetStats.pendingFactures} a valider</div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{cabinetStats.pendingFactures} à valider</div>
           </div>
           <div className="kpi">
             <div className="kpi-label"><FileText size={14} /> Volume TTC</div>
@@ -342,9 +342,9 @@ export default function AdminPage() {
             <div style={{ fontSize: 12, color: "var(--ink-2)" }}>vision globale portefeuille</div>
           </div>
           <div className="kpi">
-            <div className="kpi-label"><ShieldCheck size={14} /> Solde TVA estime</div>
+            <div className="kpi-label"><ShieldCheck size={14} /> Solde TVA estimé</div>
             <div className="kpi-value">{formatMAD(cabinetStats.tvaBalance)}</div>
-            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>collectee moins deductible</div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>collectée moins déductible</div>
           </div>
         </div>
 
@@ -352,7 +352,7 @@ export default function AdminPage() {
           <div className="card" style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div className="card-title">Dossiers sous surveillance</div>
-              <div style={{ fontSize: 12, color: "var(--ink-2)" }}>Classes par niveau d'alerte</div>
+              <div style={{ fontSize: 12, color: "var(--ink-2)" }}>Classés par niveau d'alerte</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {spotlightRows.map((row) => (
@@ -376,7 +376,7 @@ export default function AdminPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{row.dossier.raison_sociale}</div>
                     <div style={{ fontSize: 12, color: "var(--ink-2)", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <span>{row.dossier.ville || "Ville non renseignee"}</span>
+                      <span>{row.dossier.ville || "Ville non renseignée"}</span>
                       <span>{row.factures.length} factures</span>
                       <span>{formatMAD(row.totalTtc)} TTC</span>
                     </div>
@@ -396,7 +396,7 @@ export default function AdminPage() {
               ))}
               {spotlightRows.length === 0 && (
                 <div style={{ padding: 18, fontSize: 13, color: "var(--ink-2)", border: "1px dashed var(--line-1)", borderRadius: 14 }}>
-                  Aucun dossier charge pour le moment. Cree un dossier pour alimenter la vue cabinet.
+                  Aucun dossier chargé pour le moment. Créez un dossier pour alimenter la vue cabinet.
                 </div>
               )}
             </div>
@@ -404,7 +404,7 @@ export default function AdminPage() {
 
           <div className="card" style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div className="card-title">Activite recente</div>
+              <div className="card-title">Activité récente</div>
               <Clock3 size={14} style={{ color: "var(--ink-3)" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -412,7 +412,7 @@ export default function AdminPage() {
                 <div key={row.dossier.id} style={{ padding: 12, border: "1px solid var(--line-0)", borderRadius: 14, background: "var(--bg-1)" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{row.dossier.raison_sociale}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 6 }}>
-                    Derniere facture {row.latestFacture?.num_facture || row.latestFacture?.nom_fichier || "sans numero"}
+                    Dernière facture {row.latestFacture?.num_facture || row.latestFacture?.nom_fichier || "sans numéro"}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11.5, color: "var(--ink-3)" }}>
                     <span>{formatDate(row.latestFacture?.date_facture || row.latestFacture?.created_at)}</span>
@@ -421,7 +421,7 @@ export default function AdminPage() {
                 </div>
               ))}
               {recentRows.length === 0 && (
-                <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Pas encore d'activite facture a afficher.</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Pas encore d'activité facture à afficher.</div>
               )}
             </div>
           </div>
@@ -432,12 +432,12 @@ export default function AdminPage() {
             <div>
               <div className="card-title">Pilotage TVA</div>
               <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>
-                Les dossiers a traiter avant declaration ou verification
+                Les dossiers à traiter avant déclaration ou vérification
               </div>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-2)" }}>
               <Landmark size={14} />
-              <span>{tvaRows.filter((row) => row.tvaStatus.label !== "Stable").length} dossier(s) a surveiller</span>
+              <span>{tvaRows.filter((row) => row.tvaStatus.label !== "Stable").length} dossier(s) à surveiller</span>
             </div>
           </div>
 
@@ -448,7 +448,7 @@ export default function AdminPage() {
                   <DossierAvatar dossier={row.dossier} size={36} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{row.dossier.raison_sociale}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{row.dossier.regime_tva === "encaissements" ? "Regime encaissements" : "Regime debits"}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{row.dossier.regime_tva === "encaissements" ? "Régime encaissements" : "Régime débits"}</div>
                   </div>
                   <span className={`badge ${row.tvaStatus.tone}`}>
                     {row.tvaStatus.label}

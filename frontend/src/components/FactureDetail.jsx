@@ -14,6 +14,51 @@ function getDisplayedTvaRate(facture) {
   return Math.round((tva / montantHt) * 10000) / 100;
 }
 
+const PCM_LABELS = {
+  "342100": "Clients",
+  "342200": "TVA collectee",
+  "344100": "TVA deductible",
+  "401100": "Fournisseurs",
+  "6111000": "Achats de marchandises",
+  "6135000": "Maintenance et entretien",
+  "6141000": "Etudes et prestations",
+  "6161000": "Transport et deplacements",
+  "6171000": "Fournitures administratives",
+  "7111000": "Ventes de marchandises",
+  "7121000": "Ventes de services",
+};
+
+function getPcmLabel(compte) {
+  const key = String(compte || "").trim();
+  return PCM_LABELS[key] || "Compte PCM a confirmer";
+}
+
+function buildAiExplanation(facture) {
+  const type = facture?.type === "vente" ? "vente" : "achat";
+  const rate = getDisplayedTvaRate(facture);
+  const compte = facture?.compte_pcm || (type === "vente" ? "7111000" : "6111000");
+  const compteLabel = getPcmLabel(compte);
+  const treatment = facture?.traitement_comptable || "a_verifier";
+  const statusText =
+    treatment === "exercice_courant"
+      ? "Le rattachement semble correspondre a l'exercice de la facture."
+      : "Le rattachement doit etre confirme avant validation.";
+
+  return [
+    `Cette facture est traitee comme un ${type}.`,
+    `La TVA detectee correspond a un taux d'environ ${rate}%.`,
+    `Le compte propose est ${compte} - ${compteLabel}.`,
+    statusText,
+  ].join(" ");
+}
+
+function getValidationMeta(status) {
+  if (status === "valide") return { label: "Validee", tone: "ready" };
+  if (status === "a_verifier") return { label: "A verifier", tone: "review" };
+  if (status === "exclue") return { label: "Exclue", tone: "review" };
+  return { label: "En attente", tone: "review" };
+}
+
 export default function FactureDetail({ facture, ecritures, onClose, onUpdate, dossierId, reviewQueue = [], onSelectFacture, onAdvanceAfterDecision }) {
   const [activeField, setActiveField] = useState(null);
   const [localF, setLocalF] = useState(facture);
@@ -94,6 +139,11 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   const hasAccountingAlert =
     localF.traitement_comptable &&
     localF.traitement_comptable !== "exercice_courant";
+  const confidencePct = Math.round((localF.confidence || 0) * 100);
+  const totalDebit = (ecritures || []).reduce((sum, row) => sum + Number(row.debit || 0), 0);
+  const totalCredit = (ecritures || []).reduce((sum, row) => sum + Number(row.credit || 0), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  const validationMeta = getValidationMeta(localF.validation_status);
   const currentReviewIndex = reviewQueue.findIndex((item) => String(item.id) === String(localF.id));
   const hasReviewQueue = currentReviewIndex >= 0 && reviewQueue.length > 1;
   const previousReviewFacture = hasReviewQueue ? reviewQueue[currentReviewIndex - 1] : null;
@@ -129,7 +179,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
   }, [facture, hasReviewQueue, nextReviewFacture, onSelectFacture, previousReviewFacture]);
 
   const handleDecision = (status) => {
-    update("validation_status", status, { advanceReview: true });
+    update("validation_status", status, { advanceReview: status === "valide" });
   };
 
   if (!facture) return null;
@@ -162,22 +212,23 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
         <aside className="invoice-review-panel">
           <div className="invoice-summary">
             <div>
+              <div className="invoice-summary-kicker">Revue de facture</div>
               <h2>{localF.fournisseur || "Fournisseur à confirmer"}</h2>
               <div className="invoice-summary-meta">{localF.num_facture || "Sans numéro"} · {formatDate(localF.date_facture)}</div>
               {hasReviewQueue && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                <div className="invoice-review-nav">
                   <button
-                    className="btn btn-ghost sm"
+                    className="invoice-nav-btn"
                     onClick={() => previousReviewFacture && onSelectFacture?.(previousReviewFacture)}
                     disabled={!previousReviewFacture}
                   >
                     <ChevronLeft size={13} /> Précédente
                   </button>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>
+                  <span>
                     {currentReviewIndex + 1} / {reviewQueue.length}
                   </span>
                   <button
-                    className="btn btn-ghost sm"
+                    className="invoice-nav-btn"
                     onClick={() => nextReviewFacture && onSelectFacture?.(nextReviewFacture)}
                     disabled={!nextReviewFacture}
                   >
@@ -192,6 +243,15 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
             </div>
           </div>
 
+          <div className="invoice-review-status-row">
+            <span className={validationMeta.tone}>
+              {validationMeta.label}
+            </span>
+            <span>{confidencePct}% IA</span>
+            <span>{(ecritures || []).length} ecritures</span>
+            <span className={isBalanced ? "ready" : "review"}>{isBalanced ? "Equilibree" : "A verifier"}</span>
+          </div>
+
           <div className="invoice-panel-scroll">
             {hasAccountingAlert && (
               <div className="invoice-alert">
@@ -203,7 +263,7 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
               </div>
             )}
 
-            <section className="invoice-section">
+            <section className="invoice-section invoice-decision-section">
               <h3>Décision comptable</h3>
               <div className="invoice-form-grid">
                 <Field label="Exercice">
@@ -239,7 +299,21 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
             <section className="invoice-section">
               <div className="invoice-section-head">
                 <h3>Champs essentiels</h3>
-                <span><Sparkles size={12} /> IA {Math.round((localF.confidence || 0) * 100)}%</span>
+                <span><Sparkles size={12} /> IA {confidencePct}%</span>
+              </div>
+              <div className="invoice-metric-grid">
+                <div>
+                  <span>HT</span>
+                  <strong>{formatMAD(localF.montant_ht)} MAD</strong>
+                </div>
+                <div>
+                  <span>TVA · {getDisplayedTvaRate(localF)}%</span>
+                  <strong>{formatMAD(localF.tva)} MAD</strong>
+                </div>
+                <div>
+                  <span>TTC</span>
+                  <strong>{formatMAD(localF.montant_ttc)} MAD</strong>
+                </div>
               </div>
               <div className="invoice-form-grid">
                 <Field label="Type">
@@ -256,14 +330,26 @@ export default function FactureDetail({ facture, ecritures, onClose, onUpdate, d
                 </Field>
                 <Field label="TVA">
                   <input className="invoice-input tabular" type="number" step="0.01" defaultValue={localF.tva || 0} onBlur={(event) => update("tva", parseFloat(event.target.value) || 0)} />
+                  <small className="invoice-field-hint">Taux calcule: {getDisplayedTvaRate(localF)}%</small>
                 </Field>
                 <Field label="Total TTC" wide>
                   <input className="invoice-input tabular strong" readOnly value={formatMAD(localF.montant_ttc)} />
                 </Field>
                 <Field label="Compte PCM">
                   <input className="invoice-input tabular" defaultValue={localF.compte_pcm || ""} onBlur={(event) => update("compte_pcm", event.target.value)} />
+                  <small className="invoice-field-hint">{getPcmLabel(localF.compte_pcm)}</small>
                 </Field>
               </div>
+            </section>
+
+            <section className="invoice-section invoice-ledger-card">
+              <div className="invoice-section-head">
+                <h3>Ecritures generees</h3>
+                <span className={isBalanced ? "balanced" : ""}>
+                  {isBalanced ? "Equilibrees" : "Controle requis"}
+                </span>
+              </div>
+              <PremiumLedger rows={ecritures || []} />
             </section>
 
             <XaiPanel facture={localF} />
@@ -306,7 +392,7 @@ function XaiPanel({ facture }) {
   const confidence = Math.min(1, facture.confidence || 0);
   const pct = Math.round(confidence * 100);
   const risque = payload.niveau_risque;
-  const commentaire = facture.analyse_ai || payload.commentaire_analyse;
+  const commentaire = payload.commentaire_analyse || buildAiExplanation(facture);
   const texteSource = facture.texte_source;
   const methode = confidence > 0.5 ? "Claude Vision" : "Lecture heuristique";
 
@@ -366,6 +452,43 @@ function Field({ label, children, wide }) {
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+
+function PremiumLedger({ rows }) {
+  const debitSum = rows.reduce((sum, row) => sum + Number(row.debit || 0), 0);
+  const creditSum = rows.reduce((sum, row) => sum + Number(row.credit || 0), 0);
+  const balanced = Math.abs(debitSum - creditSum) < 0.01;
+
+  if (!rows.length) {
+    return (
+      <div className="invoice-ledger-premium-empty">
+        Aucune ecriture generee pour cette facture.
+      </div>
+    );
+  }
+
+  return (
+    <div className="invoice-ledger-premium">
+      {rows.map((row, index) => {
+        const side = Number(row.debit || 0) > 0 ? "debit" : "credit";
+        const amount = side === "debit" ? row.debit : row.credit;
+        return (
+          <div key={row.id || index} className={`invoice-ledger-premium-row ${side}`}>
+            <div className="invoice-ledger-premium-account">{row.compte_pcm || row.compte}</div>
+            <div className="invoice-ledger-premium-copy">
+              <strong>{row.libelle || "Ecriture comptable"}</strong>
+              <span>{getPcmLabel(row.compte_pcm || row.compte)} · {side === "debit" ? "Debit" : "Credit"}</span>
+            </div>
+            <div className="invoice-ledger-premium-amount">{formatMAD(amount).split(",")[0]}</div>
+          </div>
+        );
+      })}
+      <div className="invoice-ledger-premium-total">
+        <span className={balanced ? "ok" : "warn"}>{balanced ? "Journal equilibre" : "Controle requis"}</span>
+        <strong>{formatMAD(debitSum).split(",")[0]} / {formatMAD(creditSum).split(",")[0]}</strong>
+      </div>
+    </div>
   );
 }
 

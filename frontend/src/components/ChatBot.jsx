@@ -163,7 +163,9 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
         if (selectedContactId === undefined && nextContacts.length > 0) {
           setSelectedContactId(nextContacts[0].id);
         }
-      } catch {}
+      } catch {
+        // Chat polling is best-effort: keep the workspace usable if the API blips.
+      }
     };
 
     load();
@@ -185,7 +187,9 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
       try {
         const response = await getPrivateMessages(token, dossierId, selectedContactId);
         if (active) setPrivateMessages(response.data || []);
-      } catch {}
+      } catch {
+        // Private chat refresh is best-effort and will retry on the next poll.
+      }
     };
 
     loadPrivateConversation();
@@ -355,7 +359,7 @@ export default function ChatBot({ dossierId, open, onClose, onOpen }) {
                 ? isPrivateMode
                   ? `Conversation privee avec ${selectedContact?.nom || selectedContact?.email || "..." }`
                   : "Canal projet du dossier"
-                : "Factures, TVA, ecritures, dossier"}
+                : "Factures, TVA, écritures, dossier"}
             </div>
           </div>
           <button className="icon-btn chatbot-close" onClick={onClose}><X size={14} /></button>

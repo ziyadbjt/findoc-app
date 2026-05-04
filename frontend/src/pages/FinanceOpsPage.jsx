@@ -83,15 +83,15 @@ function scoreInvoice(facture, partnerStats, now) {
     reasons.push(`${lateDays}j de retard`);
   } else if (dueIn != null && dueIn <= 7 && !isPaid(facture)) {
     score += 14;
-    reasons.push("echeance sous 7 jours");
+    reasons.push("échéance sous 7 jours");
   } else if (dueIn != null && dueIn <= 30 && !isPaid(facture)) {
     score += 7;
-    reasons.push("echeance proche");
+    reasons.push("échéance proche");
   }
 
   if (partnerAverage > 0 && value > partnerAverage * 1.5) {
     score += 13;
-    reasons.push("montant superieur au profil du tiers");
+    reasons.push("montant supérieur au profil du tiers");
   }
 
   if (overdueRatio >= 0.25) {
@@ -101,7 +101,7 @@ function scoreInvoice(facture, partnerStats, now) {
 
   if (facture.validation_status === "a_verifier" || facture.statut === "a_valider" || facture.statut === "\u00e0_valider") {
     score += 8;
-    reasons.push("validation humaine conseillee");
+    reasons.push("validation humaine conseillée");
   }
 
   if (facture.confidence != null && Number(facture.confidence) < 0.82) {
@@ -109,7 +109,7 @@ function scoreInvoice(facture, partnerStats, now) {
     reasons.push("confiance extraction faible");
   }
 
-  if (!reasons.length) reasons.push(isPaid(facture) ? "facture payee" : "profil normal");
+  if (!reasons.length) reasons.push(isPaid(facture) ? "facture payée" : "profil normal");
 
   const finalScore = Math.round(clamp(score, 0, 100));
   const level = finalScore >= 70 ? "high" : finalScore >= 45 ? "medium" : "low";
@@ -131,7 +131,7 @@ function detectOpsAnomalies(factures) {
       const expected = ratios.some((rate) => Math.abs(amount(facture.montant_ht) * rate - amount(facture.tva)) < 3);
       if (!expected && amount(facture.montant_ht) > 1000) {
         anomalies.push({
-          label: "TVA incoherente",
+          label: "TVA incohérente",
           detail: `${facture.fournisseur || facture.num_facture || "Facture"} - TVA ${formatMAD(facture.tva).split(",")[0]} MAD`,
           tone: "warn",
         });
@@ -211,7 +211,7 @@ function buildActions({ riskItems, anomalies, tvaNet, bfr, payables, receivables
       icon: Users,
       tone: "warn",
       title: "Relance prioritaire",
-      text: `${riskiest.fournisseur || "Client"} presente un risque ${riskiest.riskScore}/100.`,
+      text: `${riskiest.fournisseur || "Client"} présente un risque ${riskiest.riskScore}/100.`,
       route: "relances",
     });
   }
@@ -220,8 +220,8 @@ function buildActions({ riskItems, anomalies, tvaNet, bfr, payables, receivables
     actions.push({
       icon: Clock,
       tone: "neg",
-      title: "Decaissement a planifier",
-      text: `${urgentPayable.fournisseur || "Fournisseur"} arrive a echeance ${urgentPayable.dueIn <= 0 ? "maintenant" : `dans ${urgentPayable.dueIn}j`}.`,
+      title: "Décaissement à planifier",
+      text: `${urgentPayable.fournisseur || "Fournisseur"} arrive à échéance ${urgentPayable.dueIn <= 0 ? "maintenant" : `dans ${urgentPayable.dueIn}j`}.`,
       route: "treso",
     });
   }
@@ -230,8 +230,8 @@ function buildActions({ riskItems, anomalies, tvaNet, bfr, payables, receivables
     actions.push({
       icon: ShieldAlert,
       tone: "accent",
-      title: "Controle comptable",
-      text: `${anomalies.length} signal${anomalies.length > 1 ? "s" : ""} a verifier avant cloture.`,
+      title: "Contrôle comptable",
+      text: `${anomalies.length} signal${anomalies.length > 1 ? "s" : ""} à vérifier avant clôture.`,
       route: "anomalies",
     });
   }
@@ -240,8 +240,8 @@ function buildActions({ riskItems, anomalies, tvaNet, bfr, payables, receivables
     actions.push({
       icon: Landmark,
       tone: "info",
-      title: "TVA a anticiper",
-      text: `${formatMAD(tvaNet).split(",")[0]} MAD de TVA nette a reverser.`,
+      title: "TVA à anticiper",
+      text: `${formatMAD(tvaNet).split(",")[0]} MAD de TVA nette à reverser.`,
       route: "tva",
     });
   }
@@ -251,7 +251,7 @@ function buildActions({ riskItems, anomalies, tvaNet, bfr, payables, receivables
       icon: Target,
       tone: "warn",
       title: "BFR sous tension",
-      text: "Les creances ouvertes pesent fortement sur la tresorerie operationnelle.",
+      text: "Les créances ouvertes pèsent fortement sur la trésorerie opérationnelle.",
       route: "delai_paiement",
     });
   }
@@ -273,41 +273,41 @@ function buildHeroInsight(model) {
   if (model.weightedCash < 0) {
     return {
       title: `Cash 30j sous tension: ${money(model.weightedCash)} MAD`,
-      text: "Les decaissements probables depassent les encaissements attendus. Priorite aux relances clients et aux paiements fournisseurs les plus proches.",
+      text: "Les décaissements probables dépassent les encaissements attendus. Priorité aux relances clients et aux paiements fournisseurs les plus proches.",
     };
   }
 
   if (model.riskItems.length >= 3) {
     return {
-      title: `${model.riskItems.length} factures a surveiller en priorite`,
-      text: "Le risque vient surtout des echeances, des retards ouverts et des profils de tiers. Ces montants doivent passer avant les paiements non urgents.",
+      title: `${model.riskItems.length} factures à surveiller en priorité`,
+      text: "Le risque vient surtout des échéances, des retards ouverts et des profils de tiers. Ces montants doivent passer avant les paiements non urgents.",
     };
   }
 
   if (model.anomalies.length > 0) {
     return {
-      title: `${model.anomalies.length} controle${model.anomalies.length > 1 ? "s" : ""} a faire avant validation`,
-      text: "Des signaux comptables ressortent sur les montants, la TVA ou les doublons possibles. Le traitement peut rester rapide, mais il merite une revue.",
+      title: `${model.anomalies.length} contrôle${model.anomalies.length > 1 ? "s" : ""} à faire avant validation`,
+      text: "Des signaux comptables ressortent sur les montants, la TVA ou les doublons possibles. Le traitement peut rester rapide, mais il mérite une revue.",
     };
   }
 
   if (model.bfr > 0) {
     return {
       title: `BFR positif de ${money(model.bfr)} MAD`,
-      text: "Les creances ouvertes restent superieures aux dettes fournisseurs. Le dossier est sain, mais l'encaissement client reste le levier principal.",
+      text: "Les créances ouvertes restent supérieures aux dettes fournisseurs. Le dossier est sain, mais l'encaissement client reste le levier principal.",
     };
   }
 
   if (model.tvaNet > 0) {
     return {
-      title: `TVA nette a anticiper: ${money(model.tvaNet)} MAD`,
-      text: "La position fiscale est lisible sur l'exercice courant. Le pilotage doit surtout garder le calendrier de declaration sous controle.",
+      title: `TVA nette à anticiper: ${money(model.tvaNet)} MAD`,
+      text: "La position fiscale est lisible sur l'exercice courant. Le pilotage doit surtout garder le calendrier de déclaration sous contrôle.",
     };
   }
 
   return {
-    title: "Situation operationnelle stable",
-    text: "Les flux ouverts ne montrent pas de tension forte. Le dossier peut etre suivi par routine avec une attention normale aux prochaines echeances.",
+    title: "Situation opérationnelle stable",
+    text: "Les flux ouverts ne montrent pas de tension forte. Le dossier peut être suivi par routine avec une attention normale aux prochaines échéances.",
   };
 }
 
@@ -336,7 +336,7 @@ function KPI({ icon, label, value, unit = "MAD", hint, tone = "neutral" }) {
 }
 
 function ScorePill({ score, level }) {
-  const label = level === "high" ? "Eleve" : level === "medium" ? "Moyen" : "Faible";
+  const label = level === "high" ? "Élevé" : level === "medium" ? "Moyen" : "Faible";
   return <span className={`finance-score ${level}`}>{label} - {score}</span>;
 }
 
@@ -348,7 +348,7 @@ function CashWeeks({ weeks }) {
         <div key={week.label} className="finance-cash-week">
           <div className="finance-cash-week__meta">
             <strong>{week.label}</strong>
-            <span>J+{week.start} a J+{week.end}</span>
+            <span>J+{week.start} à J+{week.end}</span>
           </div>
           <div className="finance-cash-bars">
             <span className="pos" style={{ width: `${(week.entrees / max) * 100}%` }} />
@@ -374,6 +374,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
     const ventes = scoped.filter(isSale);
     const achats = scoped.filter((facture) => !isSale(facture));
     const open = scored.filter((facture) => !isPaid(facture));
+    const urgentCount = open.filter((facture) => facture.dueIn != null && facture.dueIn <= 7).length;
     const receivablesRows = open.filter(isSale).sort((a, b) => b.riskScore - a.riskScore);
     const payableRows = open.filter((facture) => !isSale(facture)).sort((a, b) => (a.dueIn ?? 999) - (b.dueIn ?? 999));
     const receivables = receivablesRows.reduce((sum, facture) => sum + amount(facture.montant_ttc), 0);
@@ -397,6 +398,8 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
       purchases,
       receivables,
       payables,
+      openAmount: receivables + payables,
+      urgentCount,
       bfr,
       tvaNet: tvaCollectee - tvaDeductible,
       anomalies,
@@ -421,6 +424,11 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
     : 12;
   const cashTone = model.weightedCash >= 0 ? "pos" : "neg";
   const heroInsight = buildHeroInsight(model);
+  const heroSignals = [
+    { label: "Ouvert", value: `${money(model.openAmount)} MAD` },
+    { label: "Urgent 7j", value: String(model.urgentCount) },
+    { label: "Anomalies", value: String(model.anomalies.length) },
+  ];
 
   return (
     <div className="page-inner finance-ops-page">
@@ -428,12 +436,12 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
         <div>
           <h1 className="page-title">Pilotage financier</h1>
           <p className="page-subtitle">
-            Synthese risques & tresorerie - {dossier?.raison_sociale || "Dossier"} - exercice {currentExercise || "courant"}
+            Synthèse risques & trésorerie - {dossier?.raison_sociale || "Dossier"} - exercice {currentExercise || "courant"}
           </p>
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={() => onNavigate?.("treso")}>
-            <TrendingUp size={13} /> Tresorerie
+            <TrendingUp size={13} /> Trésorerie
           </button>
           <button className="btn btn-primary" onClick={() => onNavigate?.("relances")}>
             <Sparkles size={13} /> Actions
@@ -446,12 +454,20 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           <div className="badge accent">Intelligence explicable</div>
           <h2>{heroInsight.title}</h2>
           <p>{heroInsight.text}</p>
+          <div className="finance-ops-hero__signals">
+            {heroSignals.map((signal) => (
+              <span key={signal.label}>
+                <strong>{signal.value}</strong>
+                {signal.label}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="finance-ops-hero__score">
           <Gauge size={22} />
           <span>Score moyen actif</span>
           <strong>{riskAverage}/100</strong>
-          <small>{model.riskItems.length} facture{model.riskItems.length > 1 ? "s" : ""} a surveiller</small>
+          <small>{model.riskItems.length} facture{model.riskItems.length > 1 ? "s" : ""} à surveiller</small>
         </div>
       </section>
 
@@ -460,21 +476,21 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           icon={<Banknote size={15} />}
           label="Cash net 30j"
           value={`${model.weightedCash >= 0 ? "+" : ""}${money(model.weightedCash)}`}
-          hint="Flux ponderes par probabilite de paiement"
+          hint="Flux pondérés par probabilité de paiement"
           tone={cashTone}
         />
         <KPI
           icon={<Activity size={15} />}
-          label="BFR simplifie"
+          label="BFR simplifié"
           value={money(model.bfr)}
-          hint={`${money(model.receivables)} creances - ${money(model.payables)} dettes`}
+          hint={`${money(model.receivables)} créances - ${money(model.payables)} dettes`}
           tone={model.bfr > 0 ? "warn" : "pos"}
         />
         <KPI
           icon={<Receipt size={15} />}
           label="TVA nette"
           value={money(model.tvaNet)}
-          hint={model.tvaNet >= 0 ? "Montant potentiel a reverser" : "Credit TVA potentiel"}
+          hint={model.tvaNet >= 0 ? "Montant potentiel à reverser" : "Crédit TVA potentiel"}
           tone={model.tvaNet >= 0 ? "accent" : "pos"}
         />
         <KPI
@@ -482,7 +498,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           label="Signaux ML"
           value={String(model.riskItems.length + model.anomalies.length)}
           unit=""
-          hint="Risques, anomalies et controles"
+          hint="Risques, anomalies et contrôles"
           tone={model.riskItems.length + model.anomalies.length > 0 ? "neg" : "pos"}
         />
       </section>
@@ -491,7 +507,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
         <article className="card finance-panel">
           <div className="finance-panel__head">
             <div>
-              <div className="kpi-label">Projection ponderee</div>
+              <div className="kpi-label">Projection pondérée</div>
               <div className="card-title">Cash attendu sur 30 jours</div>
             </div>
             <span className={`badge ${cashTone}`}>{cashTone === "pos" ? "positif" : "sous tension"}</span>
@@ -499,15 +515,15 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           <CashWeeks weeks={model.weeks} />
           <div className="finance-legend">
             <span><i className="pos" /> encaissements probables</span>
-            <span><i className="neg" /> decaissements prevus</span>
+            <span><i className="neg" /> décaissements prévus</span>
           </div>
         </article>
 
         <article className="card finance-panel">
           <div className="finance-panel__head">
             <div>
-              <div className="kpi-label">Actions recommandees</div>
-              <div className="card-title">Prochaines decisions</div>
+              <div className="kpi-label">Actions recommandées</div>
+              <div className="card-title">Prochaines décisions</div>
             </div>
           </div>
           <div className="finance-action-list">
@@ -533,10 +549,10 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           <div className="finance-panel__head">
             <div>
               <div className="kpi-label">Scoring facture</div>
-              <div className="card-title">Factures a risque</div>
+              <div className="card-title">Factures à risque</div>
             </div>
             <button className="btn btn-ghost sm" onClick={() => onNavigate?.("delai_paiement")}>
-              Voir delais
+              Voir délais
             </button>
           </div>
           {model.riskItems.length === 0 ? (
@@ -550,7 +566,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
                 <div key={facture.id || `${facture.fournisseur}-${facture.num_facture}`} className="finance-risk-row">
                   <div>
                     <strong>{facture.fournisseur || "Sans tiers"}</strong>
-                    <span>{facture.num_facture || "Sans numero"} - {formatDate(facture.date_echeance || facture.date_facture)}</span>
+                    <span>{facture.num_facture || "Sans numéro"} - {formatDate(facture.date_echeance || facture.date_facture)}</span>
                     <small>{facture.riskReasons.join(" - ")}</small>
                   </div>
                   <div>
@@ -566,8 +582,8 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
         <article className="card finance-panel">
           <div className="finance-panel__head">
             <div>
-              <div className="kpi-label">Controle automatique</div>
-              <div className="card-title">Anomalies operationnelles</div>
+              <div className="kpi-label">Contrôle automatique</div>
+              <div className="card-title">Anomalies opérationnelles</div>
             </div>
             <button className="btn btn-ghost sm" onClick={() => onNavigate?.("anomalies")}>
               Audit
@@ -576,7 +592,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
           {model.anomalies.length === 0 ? (
             <div className="finance-empty">
               <ShieldAlert size={22} />
-              <span>Aucun signal comptable fort dans l'echantillon courant.</span>
+              <span>Aucun signal comptable fort dans l'échantillon courant.</span>
             </div>
           ) : (
             <div className="finance-anomaly-list">
@@ -604,7 +620,7 @@ export default function FinanceOpsPage({ factures, dossier, currentExercise, onN
         <div className="finance-breakdown">
           <BreakdownItem icon={<TrendingUp size={15} />} label="Ventes TTC" value={model.revenue} tone="pos" />
           <BreakdownItem icon={<TrendingDown size={15} />} label="Achats TTC" value={model.purchases} tone="neg" />
-          <BreakdownItem icon={<Users size={15} />} label="Creances ouvertes" value={model.receivables} tone="warn" />
+          <BreakdownItem icon={<Users size={15} />} label="Créances ouvertes" value={model.receivables} tone="warn" />
           <BreakdownItem icon={<Landmark size={15} />} label="Dettes fournisseurs" value={model.payables} tone="accent" />
         </div>
       </section>

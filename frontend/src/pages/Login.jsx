@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Lock, Mail } from "lucide-react";
+import { ArrowRight, Lock, User } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import BrandLogo from "../components/BrandLogo";
 
 export default function Login() {
-  const [email, setEmail] = useState("ziyad@cabinetchami.ma");
-  const [password, setPassword] = useState("");
+  const [identifier, setIdentifier] = useState("ziyad");
+  const [password, setPassword] = useState("ziyad123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login } = useAuth();
@@ -18,10 +18,10 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      await login(email, password);
+      await login(identifier, password);
       navigate("/dossiers");
     } catch {
-      setError("Email ou mot de passe incorrect.");
+      setError("Identifiant ou mot de passe incorrect.");
     } finally {
       setLoading(false);
     }
@@ -39,22 +39,27 @@ export default function Login() {
         <section className="login-panel" aria-labelledby="login-title">
           <div className="login-panel__top">
             <h1 id="login-title" className="login-panel__title">Connexion</h1>
-            <p className="login-panel__copy">Accédez à votre espace cabinet</p>
+            <p className="login-panel__copy">Accédez à votre espace FinDoc</p>
+            <div className="login-demo-strip" aria-label="Identifiants de démonstration">
+              <span>Accès démo</span>
+              <strong>ziyad</strong>
+              <strong>ziyad123</strong>
+            </div>
           </div>
 
           <form className="login-form" onSubmit={submit}>
             <div className="login-field">
-              <label className="login-label" htmlFor="login-email">Adresse e-mail</label>
+              <label className="login-label" htmlFor="login-identifier">Identifiant</label>
               <div className="login-input-wrap">
-                <Mail size={18} aria-hidden="true" />
+                <User size={18} aria-hidden="true" />
                 <input
-                  id="login-email"
+                  id="login-identifier"
                   className="login-input"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  autoComplete="email"
-                  placeholder="nom@cabinet.ma"
+                  type="text"
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  autoComplete="username"
+                  placeholder="ziyad"
                 />
               </div>
             </div>
@@ -72,7 +77,7 @@ export default function Login() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="current-password"
-                  placeholder="••••••••"
+                  placeholder="Mot de passe"
                 />
               </div>
             </div>
@@ -89,7 +94,7 @@ export default function Login() {
 
       <footer className="login-footer">
         <BrandLogo className="login-footer__logo" surface="auth" theme={theme} />
-        <span>© 2026 FinDoc. Tous droits réservés.</span>
+        <span>2026 FinDoc. Tous droits réservés.</span>
       </footer>
     </div>
   );

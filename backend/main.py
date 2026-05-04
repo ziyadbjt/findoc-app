@@ -33,7 +33,23 @@ _FACTURE_NEW_COLS = [
     ("texte_source", "TEXT"),
     ("ocr_payload", "TEXT"),
 ]
+_USER_NEW_COLS = [
+    ("username", "TEXT"),
+]
 with sqlite3.connect(_DB_PATH) as connection:
+    user_existing = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+    for col, typ in _USER_NEW_COLS:
+        if col not in user_existing:
+            connection.execute(f"ALTER TABLE users ADD COLUMN {col} {typ}")
+    connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users(username) WHERE username IS NOT NULL AND username != ''")
+    connection.execute(
+        """
+        UPDATE users
+        SET username = 'ziyad'
+        WHERE (username IS NULL OR username = '')
+          AND lower(email) IN ('ziyad@cabinetchami.ma', 'ziyad@findoc.local')
+        """
+    )
     existing = {row[1] for row in connection.execute("PRAGMA table_info(dossiers)")}
     for col, typ in _NEW_COLS:
         if col not in existing:

@@ -42,6 +42,19 @@ const CRUMBS = {
   rapport_mensuel: ["Dossier", "Rapport mensuel IA"],
 };
 
+function normalizeEcriture(row, factureById) {
+  const facture = factureById.get(String(row.facture_id)) || {};
+  const compte = row.compte || row.compte_pcm || "";
+  return {
+    ...row,
+    compte,
+    compte_pcm: row.compte_pcm || compte,
+    date: row.date || facture.date_facture || row.created_at,
+    journal: row.journal || "AC",
+    tiers: row.tiers || facture.fournisseur || "",
+  };
+}
+
 function PageFallback() {
   return (
     <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -119,8 +132,10 @@ export default function Dashboard() {
       setDossier(enrichDossier(dosRes.data));
       const dossierExercise = dosRes.data.exercice_courant || Number(localStorage.getItem(`findoc:exercise:${id}`)) || new Date().getFullYear();
       setCurrentExercise(dossierExercise);
-      setFactures(facRes.data.map(enrichFacture));
-      setEcritures(ecrRes.data || []);
+      const nextFactures = facRes.data.map(enrichFacture);
+      const factureById = new Map(nextFactures.map((facture) => [String(facture.id), facture]));
+      setFactures(nextFactures);
+      setEcritures((ecrRes.data || []).map((row) => normalizeEcriture(row, factureById)));
     } catch {
       toast("Erreur lors du chargement des donnees", "neg");
     } finally {
@@ -276,7 +291,7 @@ export default function Dashboard() {
       a.href = url;
       a.download = `journal_${id}.xlsx`;
       a.click();
-      toast("Export SAGE 100 genere", "pos");
+      toast("Export SAGE 100 généré", "pos");
     } catch {
       toast("Erreur export", "neg");
     }
