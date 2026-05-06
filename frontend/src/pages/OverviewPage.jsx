@@ -1,14 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download, AlertTriangle, Check, Mail, Upload, Sparkles, ArrowUpRight, Building2, TrendingUp, TrendingDown, Settings2, X,
 } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import Drawer from "../components/Drawer";
+import { sendChatMessage } from "../api";
 import { formatMAD, formatDate } from "../utils/format";
 
 const DASHBOARD_WIDGETS = [
   { key: "hero", label: "Vue d'ensemble", desc: "Montants, retards et signaux du dossier." },
+  { key: "health", label: "Score de santé financière", desc: "Score composite 0-100 basé sur les retards, la TVA, la concentration et la trésorerie." },
   { key: "finance", label: "Tendance & balance âgée", desc: "Flux d'achats et exposition fournisseurs." },
   { key: "comparison", label: "Comparaison N vs N-1", desc: "Vue exercice en cours contre l'exercice précédent." },
+  { key: "treso_forecast", label: "Prévision trésorerie", desc: "Projection des encaissements et décaissements à 30, 60 et 90 jours." },
+  { key: "ia_narrative", label: "Analyse IA", desc: "Synthèse financière générée par Claude à la demande." },
   { key: "suppliers", label: "Top fournisseurs", desc: "Concentration des achats par tiers." },
   { key: "activity", label: "Activité du dossier", desc: "Actions récentes et signaux de suivi." },
 ];
@@ -30,6 +45,119 @@ function readDashboardPrefs(user, dossier) {
   } catch {
     return getDefaultWidgetPrefs();
   }
+}
+
+function useThemeColors() {
+  const readColors = () => {
+    if (typeof window === "undefined") {
+      return {
+        accent: "#1f9b61",
+        pos: "#1f9b61",
+        negInk: "#b42318",
+        warn: "#d4a72c",
+        ink2: "#5d6b63",
+        ink3: "#81908a",
+      };
+    }
+    const styles = getComputedStyle(document.documentElement);
+    const read = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+    return {
+      accent: read("--accent", "#1f9b61"),
+      pos: read("--pos", "#1f9b61"),
+      negInk: read("--neg-ink", "#b42318"),
+      warn: read("--warn", "#d4a72c"),
+      ink2: read("--ink-2", "#5d6b63"),
+      ink3: read("--ink-3", "#81908a"),
+    };
+  };
+
+  const [colors, setColors] = useState(readColors);
+
+  useEffect(() => {
+    const update = () => setColors(readColors());
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "data-accent"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return colors;
+}
+
+function useMeasuredWidth(defaultWidth = 360) {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(defaultWidth);
+
+  useEffect(() => {
+    if (!ref.current || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      const nextWidth = Math.floor(entry.contentRect.width);
+      if (nextWidth > 0) setWidth(nextWidth);
+    });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width];
+}
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const isSale = (facture) => facture?.type === "vente" || String(facture?.code_tiers || "").startsWith("CL");
+const isPaid = (facture) => ["payee", "payée", "paye", "payé", "paid"].includes(String(facture?.paiement || "").toLowerCase());
+const factureAmount = (facture) => Number(facture?.montant_ttc || 0);
+
+function calcHealthScore({ factures, overdueCount, tvaSolde, top1Amount, totalAchats }) {
+  const totalFactures = Math.max((factures || []).length, 1);
+  const paidCount = (factures || []).filter(isPaid).length;
+  const confidences = (factures || [])
+    .map((f) => Number(f.confidence))
+    .filter((value) => Number.isFinite(value));
+  const avgConfidence = confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : 0.7;
+  const scoreRetards = 100 - Math.min(100, (overdueCount / totalFactures) * 300);
+  const scoreTVA = Math.max(0, 100 - (Math.max(0, tvaSolde) / 1000));
+  const scoreConc = Math.max(0, 100 - (top1Amount / Math.max(totalAchats, 1)) * 100);
+  const scorePaiement = (paidCount / totalFactures) * 100;
+  const scoreConf = avgConfidence * 100;
+  const healthScore = Math.round(
+    0.30 * scoreRetards +
+    0.20 * scoreTVA +
+    0.20 * scoreConc +
+    0.15 * scorePaiement +
+    0.15 * scoreConf
+  );
+
+  return {
+    healthScore: clamp(healthScore, 0, 100),
+    details: [
+      { label: "Retards", value: Math.round(clamp(scoreRetards, 0, 100)) },
+      { label: "TVA", value: Math.round(clamp(scoreTVA, 0, 100)) },
+      { label: "Concentration", value: Math.round(clamp(scoreConc, 0, 100)) },
+      { label: "Paiement", value: Math.round(clamp(scorePaiement, 0, 100)) },
+      { label: "Confiance IA", value: Math.round(clamp(scoreConf, 0, 100)) },
+    ],
+  };
+}
+
+function calcTresoPrevision(factures, now) {
+  return [30, 60, 90].map((days) => {
+    const horizon = new Date(now.getTime() + days * 86400000);
+    const due = (factures || []).filter((facture) => {
+      if (isPaid(facture) || !facture.date_echeance) return false;
+      const dueDate = new Date(facture.date_echeance);
+      return dueDate >= now && dueDate <= horizon;
+    });
+    const entrees = due.filter(isSale).reduce((sum, facture) => sum + factureAmount(facture), 0);
+    const sorties = due.filter((facture) => !isSale(facture)).reduce((sum, facture) => sum + factureAmount(facture), 0);
+    return { days, entrees, sorties, net: entrees - sorties };
+  });
+}
+
+function formatK(value) {
+  if (!value) return "0";
+  return `${Math.round(value / 1000).toLocaleString("fr-FR")}k`;
 }
 
 function MiniTrend({ data, color = "var(--accent)" }) {
@@ -127,8 +255,321 @@ function ComparaisonNvsN1({ factures }) {
   );
 }
 
-export default function OverviewPage({ factures, dossier, onNavigate, user }) {
+function ScoreSante({ health, colors }) {
+  const score = health.healthScore;
+  const color = score > 75 ? "var(--pos)" : score > 50 ? "var(--warn)" : "var(--neg-ink)";
+  const radius = 78;
+  const circumference = Math.PI * radius;
+  const progress = clamp(score, 0, 100) / 100;
+  const dashOffset = circumference * (1 - progress);
+
+  return (
+    <section className="card" style={{ padding: 24, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 18 }}>
+        <div>
+          <div className="kpi-label">IA prédictive</div>
+          <div className="card-title">Score de santé financière</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
+            Score composite basé sur les retards, la TVA, la concentration, les paiements et la confiance OCR.
+          </div>
+        </div>
+        <span className="badge accent">0-100</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, alignItems: "center" }}>
+        <svg viewBox="0 0 200 120" width="100%" height="150" role="img" aria-label={`Score ${score} sur 100`}>
+          <path
+            d="M22 100 A78 78 0 0 1 178 100"
+            fill="none"
+            stroke="var(--bg-inset)"
+            strokeWidth="18"
+            strokeLinecap="round"
+          />
+          <path
+            className="health-arc-fill"
+            d="M22 100 A78 78 0 0 1 178 100"
+            fill="none"
+            stroke={color}
+            strokeWidth="18"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+          />
+          <text x="100" y="78" textAnchor="middle" style={{ fontSize: 34, fontWeight: 800, fill: color, fontFamily: "var(--font-mono)" }}>
+            {score}
+          </text>
+          <text x="100" y="99" textAnchor="middle" style={{ fontSize: 12, fontWeight: 600, fill: colors.ink2 }}>
+            /100
+          </text>
+        </svg>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))", gap: 10 }}>
+          {health.details.map((detail) => (
+            <div key={detail.label} className="card" style={{ padding: 14, background: "var(--bg-inset)" }}>
+              <div className="kpi-label" style={{ marginBottom: 8 }}>{detail.label}</div>
+              <div className="mono tabular" style={{ fontSize: 22, fontWeight: 800, color: detail.value > 70 ? "var(--pos-ink)" : detail.value > 45 ? "var(--warn-ink)" : "var(--neg-ink)" }}>
+                {detail.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TresoPrevision({ data, onNavigate }) {
+  const maxAbs = Math.max(...data.map((item) => Math.abs(item.net)), 1);
+
+  return (
+    <section className="card" style={{ padding: 24, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, marginBottom: 18 }}>
+        <div>
+          <div className="kpi-label">Cash forecast</div>
+          <div className="card-title">Prévision trésorerie 30/60/90j</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
+            Encaissements et décaissements attendus sur les factures non payées.
+          </div>
+        </div>
+        {onNavigate && (
+          <button className="btn btn-ghost sm" onClick={() => onNavigate("treso")}>
+            Voir la trésorerie complète
+            <ArrowUpRight size={13} />
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+        {data.map((item) => {
+          const negative = item.net < 0;
+          const width = Math.max(8, (Math.abs(item.net) / maxAbs) * 100);
+          return (
+            <div key={item.days} className="card" style={{ padding: 18, background: "var(--bg-inset)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <div className="kpi-label">Dans {item.days}j</div>
+                {negative && <AlertTriangle size={14} style={{ color: "var(--warn-ink)" }} />}
+              </div>
+              <div className="kpi-value" style={{ color: negative ? "var(--neg-ink)" : "var(--pos-ink)", marginBottom: 12 }}>
+                <span className="tabular">{formatMAD(item.net).split(",")[0]}</span>
+                <span className="unit">MAD</span>
+              </div>
+              <div className="treso-bar-track" aria-hidden="true">
+                <div className="treso-bar-fill" style={{ width: `${width}%`, background: negative ? "var(--neg-ink)" : "var(--pos)" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12, fontSize: 11.5, color: "var(--ink-2)" }}>
+                <span>Entrées {formatMAD(item.entrees).split(",")[0]}</span>
+                <span>Sorties {formatMAD(item.sorties).split(",")[0]}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FluxAreaChart({ data, colors }) {
+  const [ref, width] = useMeasuredWidth(520);
+  const chartWidth = Math.max(280, width);
+
+  return (
+    <div ref={ref} style={{ height: 230, marginTop: 6, minWidth: 0 }}>
+      <AreaChart width={chartWidth} height={230} data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+        <defs>
+          <linearGradient id="achatsGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={colors.accent} stopOpacity={0.34} />
+            <stop offset="95%" stopColor={colors.accent} stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="ventesGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={colors.pos} stopOpacity={0.32} />
+            <stop offset="95%" stopColor={colors.pos} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="var(--line-1)" vertical={false} />
+        <XAxis dataKey="month" tick={{ fill: colors.ink3, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={formatK} tick={{ fill: colors.ink3, fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
+        <Tooltip
+          formatter={(value, name) => [`${formatMAD(value).split(",")[0]} MAD`, name === "achats" ? "Achats" : "Ventes"]}
+          contentStyle={{
+            background: "var(--surface)",
+            border: "1px solid var(--line-1)",
+            borderRadius: 10,
+            color: "var(--ink-1)",
+            boxShadow: "var(--shadow-soft)",
+          }}
+          labelStyle={{ color: "var(--ink-2)", fontSize: 12 }}
+        />
+        <Area type="monotone" dataKey="achats" stroke={colors.accent} fill="url(#achatsGradient)" strokeWidth={2.5} dot={false} />
+        <Area type="monotone" dataKey="ventes" stroke={colors.pos} fill="url(#ventesGradient)" strokeWidth={2.5} dot={false} />
+      </AreaChart>
+    </div>
+  );
+}
+
+function SupplierBarChart({ data, colors }) {
+  const [ref, width] = useMeasuredWidth(420);
+  const chartWidth = Math.max(280, width);
+
+  return (
+    <div ref={ref} className="card" style={{ padding: 14, background: "var(--bg-inset)", height: 280, minWidth: 0 }}>
+      <BarChart
+        width={chartWidth}
+        height={250}
+        data={data}
+        layout="vertical"
+        margin={{ top: 8, right: 22, left: 8, bottom: 8 }}
+      >
+        <CartesianGrid stroke="var(--line-1)" horizontal={false} />
+        <XAxis type="number" tickFormatter={formatK} tick={{ fill: colors.ink3, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={112}
+          tick={{ fill: colors.ink2, fontSize: 11, fontWeight: 600 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(value) => String(value).length > 16 ? `${String(value).slice(0, 15)}…` : value}
+        />
+        <Tooltip
+          formatter={(value) => [`${formatMAD(value).split(",")[0]} MAD`, "Achats"]}
+          contentStyle={{
+            background: "var(--surface)",
+            border: "1px solid var(--line-1)",
+            borderRadius: 10,
+            color: "var(--ink-1)",
+            boxShadow: "var(--shadow-soft)",
+          }}
+        />
+        <Bar dataKey="amount" radius={[0, 8, 8, 0]} barSize={22} minPointSize={0}>
+          {data.map((entry) => (
+            <Cell key={entry.name} fill={colors.accent} fillOpacity={entry.opacity} />
+          ))}
+        </Bar>
+      </BarChart>
+    </div>
+  );
+}
+
+function AnalyseIA({ dossierId, dossier, user, factures, totals, overdue, overdueTotal, penaltyTotal, aging, healthScore, topSupplier }) {
+  const [iaText, setIaText] = useState("");
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaError, setIaError] = useState("");
+  const [cachedAt, setCachedAt] = useState(null);
+  const cacheKey = useMemo(() => {
+    const dossierKey = dossierId || dossier?.id || "global";
+    const hourKey = new Date().toISOString().slice(0, 13);
+    return `findoc:ia:${user?.email || "anon"}:${dossierKey}:${hourKey}`;
+  }, [dossierId, dossier?.id, user?.email]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.text) {
+        setIaText(parsed.text);
+        setCachedAt(parsed.generatedAt || null);
+      }
+    } catch {
+      setCachedAt(null);
+    }
+  }, [cacheKey]);
+
+  const generate = async (force = false) => {
+    if (iaLoading) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIaError("Session expirée. Reconnectez-vous pour générer l'analyse IA.");
+      return;
+    }
+    if (force) {
+      localStorage.removeItem(cacheKey);
+      setCachedAt(null);
+    }
+
+    const top1Name = topSupplier?.[0] || "N/A";
+    const top1Pct = totals.totalAchats ? Math.round((Number(topSupplier?.[1] || 0) / totals.totalAchats) * 100) : 0;
+    const year = dossier?.exercice_courant || new Date().getFullYear();
+    const prompt = `Tu es un expert-comptable marocain. Analyse la situation financière de ce dossier.
+
+DONNÉES :
+- Société : ${dossier?.raison_sociale || "N/A"} (${dossier?.forme_juridique || "N/A"})
+- Exercice : ${year}
+- Achats TTC : ${Math.round(totals.totalAchats)} MAD (${factures.length} factures)
+- Ventes TTC : ${Math.round(totals.totalVentes)} MAD
+- TVA récupérable : ${Math.round(totals.totalTva)} MAD | Solde TVA : ${Math.round(totals.tvaSolde)} MAD
+- Retards : ${overdue.length} factures · ${Math.round(overdueTotal)} MAD
+- Pénalités Loi 69-21 (5,25%/an) : ${Math.round(penaltyTotal)} MAD
+- Balance âgée >90j : ${Math.round(aging["90+"] || 0)} MAD
+- Score santé : ${healthScore}/100
+- Top fournisseur : ${top1Name} = ${top1Pct}% des achats
+
+INSTRUCTIONS : 1) 2 points forts. 2) Risques prioritaires. 3) 2 actions actionnables. 4) Appréciation globale.
+150-200 mots, français, structuré.`;
+
+    setIaText("");
+    setIaError("");
+    setIaLoading(true);
+    try {
+      let fullText = "";
+      await sendChatMessage(
+        token,
+        { dossier_id: Number(dossierId || dossier?.id), message: prompt, historique: [] },
+        {
+          onChunk: (chunk) => {
+            fullText += chunk;
+            setIaText(fullText);
+          },
+          onDone: () => {
+            const generatedAt = new Date().toISOString();
+            setCachedAt(generatedAt);
+            localStorage.setItem(cacheKey, JSON.stringify({ text: fullText, generatedAt }));
+          },
+        }
+      );
+    } catch {
+      setIaError("Analyse indisponible pour le moment.");
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const cacheAge = cachedAt ? Math.max(0, Math.round((Date.now() - new Date(cachedAt).getTime()) / 3600000)) : null;
+
+  return (
+    <section className="card" style={{ padding: 24, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+        <div>
+          <div className="kpi-label">Narrative Claude</div>
+          <div className="card-title">Analyse IA du dossier</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
+            Synthèse générée à la demande à partir des indicateurs calculés localement.
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={() => generate(Boolean(iaText))} disabled={iaLoading}>
+          <Sparkles size={14} />
+          {iaLoading ? "Génération..." : iaText ? "Actualiser" : "Générer"}
+        </button>
+      </div>
+
+      <div className="card" style={{ padding: 18, background: "var(--bg-inset)", minHeight: 150, whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: 13.5, color: "var(--ink-1)" }}>
+        {iaText || "Cliquez sur Générer pour produire une lecture financière structurée du dossier."}
+        {iaLoading && <span className="ia-cursor" />}
+      </div>
+      {iaError && <div style={{ marginTop: 10, fontSize: 12, color: "var(--neg-ink)" }}>{iaError}</div>}
+      {cachedAt && !iaLoading && (
+        <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-3)", display: "flex", gap: 8, alignItems: "center" }}>
+          <span>Généré il y a ~{cacheAge}h</span>
+          <button className="btn btn-ghost sm" onClick={() => generate(true)}>Actualiser</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function OverviewPage({ factures, dossier, dossierId, onNavigate, user }) {
   const now = useMemo(() => new Date(), []);
+  const themeColors = useThemeColors();
   const [showCustomize, setShowCustomize] = useState(false);
   const [visibleWidgets, setVisibleWidgets] = useState(() => readDashboardPrefs(user, dossier));
 
@@ -163,19 +604,29 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
   const totalTva = useMemo(() => processed.reduce((s, f) => s + (f.tva || 0), 0), [processed]);
   const overdue = useMemo(() => factures.filter((f) => f.paiement === "en_retard"), [factures]);
   const overdueTotal = useMemo(() => overdue.reduce((s, f) => s + (f.montant_ttc || 0), 0), [overdue]);
+  const penaltyTotal = useMemo(() => overdue.reduce((s, f) => {
+    const days = Math.max(0, (now - new Date(f.date_echeance)) / 86400000);
+    return s + (f.montant_ttc || 0) * 0.0525 * Math.max(0, days - 60) / 365;
+  }, 0), [overdue, now]);
 
   const topFournisseurs = useMemo(() => {
     const map = new Map();
     processed.forEach((f) => {
+      if (!f.fournisseur) return;
       map.set(f.fournisseur, (map.get(f.fournisseur) || 0) + (f.montant_ttc || 0));
     });
-    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [processed]);
 
   const totalAging = Object.values(aging).reduce((a, b) => a + b, 0) || 1;
 
   const totalVentes = useMemo(
     () => factures.filter(f => f.type === "vente").reduce((s, f) => s + (f.montant_ttc || 0), 0),
+    [factures]
+  );
+  const tvaSolde = useMemo(
+    () => factures.filter(f => f.type === "vente").reduce((s, f) => s + (f.tva || 0), 0)
+      - factures.filter(f => f.type !== "vente").reduce((s, f) => s + (f.tva || 0), 0),
     [factures]
   );
 
@@ -204,6 +655,32 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
     }),
     [factures, now]
   );
+  const chartData = useMemo(() => {
+    const months = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+    return trendAchats.map((achats, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      return { month: months[d.getMonth()], achats, ventes: trendVentes[i] || 0 };
+    });
+  }, [trendAchats, trendVentes, now]);
+  const supplierChartData = useMemo(
+    () => topFournisseurs.map(([name, amount], index) => ({
+      name,
+      amount,
+      opacity: Math.max(0.35, 1 - index * 0.15),
+    })),
+    [topFournisseurs]
+  );
+  const health = useMemo(
+    () => calcHealthScore({
+      factures,
+      overdueCount: overdue.length,
+      tvaSolde,
+      top1Amount: topFournisseurs[0]?.[1] || 0,
+      totalAchats,
+    }),
+    [factures, overdue.length, tvaSolde, topFournisseurs, totalAchats]
+  );
+  const tresoPrevision = useMemo(() => calcTresoPrevision(factures, now), [factures, now]);
 
   const deltaAchats = useMemo(() => {
     const ms90 = 90 * 86400000;
@@ -263,8 +740,6 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
         actionLabel: "Corriger",
       });
     }
-    const tvaSolde = factures.filter(f => f.type === "vente").reduce((s, f) => s + (f.tva || 0), 0)
-      - factures.filter(f => f.type !== "vente").reduce((s, f) => s + (f.tva || 0), 0);
     if (tvaSolde > 10000) {
       alerts.push({
         type: "accent",
@@ -275,7 +750,7 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
       });
     }
     return alerts;
-  }, [factures, overdue, now]);
+  }, [factures, overdue, now, tvaSolde]);
   const overviewHeroSubtitle = overdue.length > 0
     ? `${overdue.length} retard${overdue.length > 1 ? "s" : ""} ouvert${overdue.length > 1 ? "s" : ""} pour ${formatMAD(overdueTotal).split(",")[0]} MAD exposes.`
     : smartAlerts.length > 0
@@ -310,6 +785,10 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
             </div>
           ))}
         </div>
+      )}
+
+      {visibleWidgets.health !== false && (
+        <ScoreSante health={health} colors={themeColors} />
       )}
 
       {showCustomize && (
@@ -477,7 +956,7 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
                 )}
                 <span style={{ fontSize: 12, color: "var(--ink-2)" }}>sur 90 jours glissants</span>
               </div>
-              <MiniTrend data={trendAchats.some(v => v > 0) ? trendAchats : [1,1,1,1,1,1,1,1,1,1,1,1]} color="var(--accent)" />
+              <FluxAreaChart data={chartData} colors={themeColors} />
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
@@ -515,7 +994,27 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
         </section>
       )}
 
+      {visibleWidgets.treso_forecast !== false && (
+        <TresoPrevision data={tresoPrevision} onNavigate={onNavigate} />
+      )}
+
       {visibleWidgets.comparison !== false && <ComparaisonNvsN1 factures={factures} />}
+
+      {visibleWidgets.ia_narrative !== false && (
+        <AnalyseIA
+          dossierId={dossierId}
+          dossier={dossier}
+          user={user}
+          factures={factures}
+          totals={{ totalAchats, totalVentes, totalTva, tvaSolde }}
+          overdue={overdue}
+          overdueTotal={overdueTotal}
+          penaltyTotal={penaltyTotal}
+          aging={aging}
+          healthScore={health.healthScore}
+          topSupplier={topFournisseurs[0]}
+        />
+      )}
 
       {(visibleWidgets.suppliers !== false || visibleWidgets.activity !== false) && (
         <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: 16 }}>
@@ -544,23 +1043,9 @@ export default function OverviewPage({ factures, dossier, onNavigate, user }) {
                 )}
               </div>
             )}
-            {topFournisseurs.map(([name, amt], i) => (
-              <div key={name} className="card" style={{ padding: 16, background: "var(--bg-inset)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "32px 1fr auto", gap: 12, alignItems: "center" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--accent-bg)", color: "var(--accent-ink)", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700 }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
-                    <div style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                      <Building2 size={12} />
-                      fournisseur actif
-                    </div>
-                  </div>
-                  <div className="mono tabular" style={{ fontSize: 12, fontWeight: 600 }}>{formatMAD(amt).split(",")[0]}</div>
-                </div>
-              </div>
-            ))}
+            {supplierChartData.length > 0 && (
+              <SupplierBarChart data={supplierChartData} colors={themeColors} />
+            )}
           </div>
           </div>
         )}

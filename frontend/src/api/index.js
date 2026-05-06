@@ -11,6 +11,14 @@ const BASE =
 
 const auth = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 
+const isTouchAppleDevice = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isModernIPad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isIOS || isModernIPad;
+};
+
 export const loginUser = (identifier, password) => {
   const form = new URLSearchParams({ username: identifier, password });
   return axios.post(`${BASE}/auth/login`, form, {
@@ -86,6 +94,30 @@ export const uploadBankStatement = (token, dossierId, file) => {
 };
 
 export async function sendChatMessage(token, payload, handlers = {}) {
+  const sendPlain = async () => {
+    const response = await fetch(`${BASE}/chat/answer`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) throw new Error("Chat indisponible");
+    const data = await response.json();
+    if (data.answer) handlers.onChunk?.(data.answer);
+    handlers.onDone?.(data);
+    return data;
+  };
+
+  if (isTouchAppleDevice()) {
+    return sendPlain();
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 25000);
+
   const response = await fetch(`${BASE}/chat`, {
     method: "POST",
     headers: {
@@ -93,9 +125,11 @@ export async function sendChatMessage(token, payload, handlers = {}) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+    signal: controller.signal,
   });
 
   if (!response.ok || !response.body) {
+    window.clearTimeout(timeoutId);
     throw new Error("Chat indisponible");
   }
 
@@ -128,6 +162,7 @@ export async function sendChatMessage(token, payload, handlers = {}) {
   }
 
   if (buffer.trim()) emitEvent(buffer);
+  window.clearTimeout(timeoutId);
 }
 
 export async function generateMonthlyReport(token, dossierId, mois, annee, handlers = {}) {

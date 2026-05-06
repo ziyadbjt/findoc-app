@@ -536,6 +536,56 @@ async function streamClaudeChat({ message, history, context, res }) {
   if (!finished) writeSse(res, "done", { ok: true });
 }
 
+async function completeClaudeChat({ message, history, context }) {
+  const apiKey = readEnvValue("ANTHROPIC_API_KEY");
+  if (!apiKey) return { answer: fallbackChatAnswer(message, context), fallback: true };
+
+  const messages = [
+    ...(Array.isArray(history) ? history.slice(-8) : []).map((item) => ({
+      role: item.role === "assistant" ? "assistant" : "user",
+      content: String(item.content || ""),
+    })),
+    { role: "user", content: String(message || "") },
+  ];
+
+  const prompt = [
+    "Tu es FinDoc, copilote comptable expert pour cabinets comptables marocains.",
+    "Reponds toujours en francais, de maniere concise, claire et operationnelle.",
+    "Utilise le Plan Comptable Marocain, la Loi 69-21, la TVA et les donnees du dossier.",
+    "Si une information manque, dis-le sans inventer.",
+    "",
+    "Contexte du dossier:",
+    buildChatContextSummary(context),
+  ].join("\n");
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      max_tokens: 1024,
+      system: prompt,
+      messages,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Anthropic error ${response.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const answer = Array.isArray(data.content)
+    ? data.content.map((part) => part?.text || "").join("").trim()
+    : "";
+  return { answer: answer || fallbackChatAnswer(message, context), fallback: !answer };
+}
+
 const tokens = {};
 let nextId = 100;
 const DEMO_DOSSIER = {
@@ -1165,6 +1215,33 @@ print(json.dumps(result))
     try { fs.unlinkSync(tmpPath); } catch {}
     const msg = (error.stderr || error.message || "").slice(0, 300);
     res.status(500).json({ detail: `Erreur extraction : ${msg}` });
+  }
+});
+
+app.post("/chat/answer", async (req, res) => {
+  const email = requireAuth(req, res);
+  if (!email) return;
+
+  const dossierId = Number(req.body?.dossier_id);
+  const message = String(req.body?.message || "").trim();
+  const history = Array.isArray(req.body?.historique) ? req.body.historique : [];
+
+  if (!dossierId) return res.status(400).json({ detail: "dossier_id requis" });
+  if (!message) return res.status(400).json({ detail: "message requis" });
+
+  const context = buildChatContext(dossierId);
+
+  try {
+    const result = await completeClaudeChat({ message, history, context });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    console.error("[chat answer error]", error?.message, error?.stack?.slice(0, 500));
+    res.json({
+      ok: true,
+      fallback: true,
+      answer: fallbackChatAnswer(message, context),
+      detail: String(error?.message || "chat_unavailable"),
+    });
   }
 });
 
