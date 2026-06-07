@@ -22,16 +22,12 @@ function RouteFallback() {
 
 function PrivateRoute({ children }) {
   const { token, authReady } = useAuth()
-  const location = useLocation()
   if (!authReady) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#060b0a", color: "#8fd4bc", fontFamily: "Inter, sans-serif", fontSize: 13 }}>
         Chargement…
       </div>
     )
-  }
-  if (!token) {
-    return <Navigate to="/login" replace state={{ from: location }} />
   }
   return children
 }
@@ -42,12 +38,12 @@ function AnimatedRoutes() {
     <div key={location.pathname} className="app-route-shell">
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Navigate to="/dossiers" replace />} />
+          <Route path="/login" element={<Navigate to="/dossiers" replace />} />
           <Route path="/dossiers" element={<PrivateRoute><Dossiers /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
           <Route path="/dashboard/:id" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/dossiers" replace />} />
         </Routes>
       </Suspense>
     </div>

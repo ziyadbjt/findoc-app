@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useEffect } from "react"
 import { getMe, loginUser } from "../api"
+import { MOCK_USER } from "../api/mockData"
 
 const AuthContext = createContext()
 const HOSTNAME = typeof window !== "undefined" ? window.location.hostname : ""
+const IS_LOCAL = HOSTNAME === "localhost" || HOSTNAME === "127.0.0.1"
+const USE_MOCK = !IS_LOCAL && !import.meta.env.VITE_API_URL
 const IS_VERCEL_PREVIEW = HOSTNAME.endsWith(".vercel.app")
 const SKIP_LOGIN =
   import.meta.env.DEV ||
@@ -43,6 +46,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const storedToken = localStorage.getItem("token")
     const bootstrap = async () => {
+      if (USE_MOCK) {
+        setToken("demo-token")
+        setUser(MOCK_USER)
+        setAuthReady(true)
+        return
+      }
       try {
         if (storedToken) {
           await hydrateSession(storedToken)
@@ -82,7 +91,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token")
     setToken(null)
     setUser(null)
-    window.location.href = "/login"
+    window.location.href = "/dossiers"
   }
 
   return (
