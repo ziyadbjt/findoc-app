@@ -1,7 +1,7 @@
 import sqlite3, datetime
 
 import os as _os
-db = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'findoc.db')
+db = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', 'findoc.db')
 conn = sqlite3.connect(db)
 
 # ── Migrate factures ──────────────────────────────────────────────────────────

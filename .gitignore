@@ -22,3 +22,8 @@ Thumbs.db
 
 # Local generated files
 backend/uploads/
+.vercel
+
+# Local tooling
+.claude/
+CLAUDE.md
